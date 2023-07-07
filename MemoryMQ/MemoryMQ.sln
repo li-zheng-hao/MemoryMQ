@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemoryMQ", "MemoryMQ\MemoryMQ.csproj", "{ABF2FFF1-9A74-4592-824B-B8D83C661A24}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemoryMQ.Test", "MemoryMQ.Test\MemoryMQ.Test.csproj", "{1472E97C-6F13-4398-BD46-FC6CD58CCE15}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemoryMQ.Webapi", "MemoryMQ.Webapi\MemoryMQ.Webapi.csproj", "{D2149E84-260D-4B90-8FCA-31001BD43FAE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ABF2FFF1-9A74-4592-824B-B8D83C661A24}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABF2FFF1-9A74-4592-824B-B8D83C661A24}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABF2FFF1-9A74-4592-824B-B8D83C661A24}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABF2FFF1-9A74-4592-824B-B8D83C661A24}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1472E97C-6F13-4398-BD46-FC6CD58CCE15}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1472E97C-6F13-4398-BD46-FC6CD58CCE15}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1472E97C-6F13-4398-BD46-FC6CD58CCE15}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1472E97C-6F13-4398-BD46-FC6CD58CCE15}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2149E84-260D-4B90-8FCA-31001BD43FAE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2149E84-260D-4B90-8FCA-31001BD43FAE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2149E84-260D-4B90-8FCA-31001BD43FAE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2149E84-260D-4B90-8FCA-31001BD43FAE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
