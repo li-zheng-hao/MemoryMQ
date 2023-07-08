@@ -1,7 +1,14 @@
 ﻿namespace MemoryMQ;
 
-public interface IPersistStorage
+public interface IPersistStorage:IDisposable
 {
+    /// <summary>
+    /// update retry count
+    /// </summary>
+    /// <param name="message"></param>
+    /// <returns></returns>
+    Task UpdateRetryAsync(IMessage message);
+    
     Task AddAsync(IMessage message);
     
     Task RemoveAsync(IMessage message);

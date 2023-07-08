@@ -21,9 +21,9 @@ public class WeatherForecastController : ControllerBase
     }
 
     [HttpGet]
-    public IActionResult Test(string body)
+    public async Task<IActionResult> Test(string body)
     {
-        _messagePublisher.Publish("topic-a", body);
+        await _messagePublisher.PublishAsync("topic-a", body);
         return Ok();
     }
 }

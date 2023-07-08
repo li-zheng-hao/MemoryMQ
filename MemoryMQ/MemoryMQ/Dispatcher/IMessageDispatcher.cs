@@ -21,5 +21,5 @@ public interface IMessageDispatcher
     /// </summary>
     /// <param name="message"></param>
     /// <returns></returns>
-    void Enqueue(IMessage message);
+    ValueTask EnqueueAsync(IMessage message);
 }

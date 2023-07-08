@@ -1,9 +1,16 @@
+using System.Text.Json;
+
 namespace MemoryMQ.Test;
 
 public class UnitTest1
 {
     [Fact]
-    public void Test1()
+    public void SerializeTest()
     {
+        Message msg=new Message("test","test");
+        var msgStr=JsonSerializer.Serialize(msg);
+        var msg2=JsonSerializer.Deserialize<Message>(msgStr);
+        Assert.True(msg2.Body==msg.Body);
+        Assert.True(msg2.GetMessageId()==msg.GetMessageId());
     }
 }

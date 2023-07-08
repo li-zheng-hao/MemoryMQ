@@ -9,10 +9,11 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddMemoryMQ(it => { it.EnablePersistent = false;
+builder.Services.AddMemoryMQ(it => { 
+    it.EnablePersistent = true;
     it.PollingInterval = TimeSpan.FromSeconds(2);
 });
-builder.Services.AddSingleton<IMessageConsumer, ConsumerA>();
+// builder.Services.AddSingleton<IMessageConsumer, ConsumerA>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
