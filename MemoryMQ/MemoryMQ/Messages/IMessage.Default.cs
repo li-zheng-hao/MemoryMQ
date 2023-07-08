@@ -1,11 +1,11 @@
-﻿using System.Text.Json;
-
-namespace MemoryMQ;
+﻿namespace MemoryMQ.Messages;
 
 public class Message : IMessage
 {
     public Message()
     {
+        Header = new Dictionary<string, string>();
+        Body=string.Empty;
     }
 
     public Message(string topic, string body)
@@ -15,7 +15,7 @@ public class Message : IMessage
             { MessageHeader.MessageId, Guid.NewGuid().ToString() },
             { MessageHeader.Topic, topic },
             { MessageHeader.Retry, "0" },
-            { MessageHeader.CreatTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString() }
+            { MessageHeader.CreatTime, DateTime.Now.Ticks.ToString() }
         };
         
         Body = body;

@@ -1,10 +1,14 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
+using MemoryMQ.Configuration;
+using MemoryMQ.Consumer;
+using MemoryMQ.Messages;
+using MemoryMQ.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace MemoryMQ;
+namespace MemoryMQ.Dispatcher;
 
 public class DefaultMessageDispatcher : IMessageDispatcher
 {
@@ -12,25 +16,25 @@ public class DefaultMessageDispatcher : IMessageDispatcher
     private readonly IOptions<MemoryMQOptions> _options;
     private readonly IPersistStorage? _persistStorage;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IConsumerFactory _consumerFactory;
 
-    private ConcurrentDictionary<string, Channel<IMessage>> _channels =
-        new ConcurrentDictionary<string, Channel<IMessage>>();
-
-    private Dictionary<string, IMessageConsumer> _consumers = new Dictionary<string, IMessageConsumer>();
+    private readonly ConcurrentDictionary<string, Channel<IMessage>> _channels = new();
 
     /// <summary>
     /// 重试队列 如果重启则该队列会清空 所有消息会重新开始消费
     /// </summary>
-    private PriorityQueue<IMessage, long> _retryChannel = new PriorityQueue<IMessage, long>();
+    private readonly PriorityQueue<IMessage, long> _retryChannel = new();
 
     public DefaultMessageDispatcher(ILogger<DefaultMessageDispatcher> logger, IOptions<MemoryMQOptions> options,
         IServiceProvider serviceProvider,
+        IConsumerFactory consumerFactory,
         IPersistStorage? persistStorage = null)
     {
         _logger = logger;
         _options = options;
         _persistStorage = persistStorage;
         _serviceProvider = serviceProvider;
+        _consumerFactory = consumerFactory;
     }
 
     public async Task StartDispatchAsync(CancellationToken cancellationToken)
@@ -47,45 +51,64 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
     private void RunRetry(CancellationToken cancellationToken)
     {
-        Task.Factory.StartNew(() =>
+        Task.Factory.StartNew(async () =>
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                while (_retryChannel.TryPeek(out var message,out var ticks))
+                while (_retryChannel.TryPeek(out _, out var ticks))
                 {
-                    // TODO get messages which retry time is less than now
+                    if (ticks >= DateTime.Now.Ticks) continue;
+                    
+                    _retryChannel.TryDequeue(out var msg, out _);
+
+                    if (msg is null) continue;
+
+                    await EnqueueAsync(msg);
                 }
+
+                await Task.Delay(500, cancellationToken);
             }
         }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     private void RunDispatch(CancellationToken cancellationToken)
     {
-        foreach (var consumer in _consumers)
+        foreach (var consumerOptions in _consumerFactory.ConsumerOptions)
         {
-            for (int i = 0; i < consumer.Value.Config.ParallelNum; i++)
+            for (var i = 0; i < consumerOptions.Value.ParallelNum; i++)
             {
-                Task.Factory.StartNew(async () => await PollingMessage(consumer, cancellationToken), cancellationToken,
+                Task.Factory.StartNew(async () => await PollingMessage(consumerOptions.Value, cancellationToken), cancellationToken,
                     TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
         }
     }
 
-    private async Task PollingMessage(KeyValuePair<string, IMessageConsumer> consumer,
+    private async Task PollingMessage(MessageOptions messageOptions,
         CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                _channels.TryGetValue(consumer.Key, out var channel);
+                _channels.TryGetValue(messageOptions.Topic, out var channel);
 
                 while (channel!.Reader.CanPeek && channel.Reader.TryRead(out var message))
                 {
+                    using var scope = _serviceProvider.CreateScope();
+                    
+                    var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider,messageOptions.Topic);
+                    
+                    if (consumer is null)
+                    {
+                        _logger.LogWarning("{MessageOptionsTopic} consumer is null", messageOptions.Topic);
+                        
+                        continue;
+                    }
+                    
                     bool isConsumeSuccess = true;
                     try
                     {
-                        await consumer.Value.ReceivedAsync(message, cancellationToken);
+                        await consumer.ReceivedAsync(message, cancellationToken);
                     }
                     catch (Exception e)
                     {
@@ -94,7 +117,14 @@ public class DefaultMessageDispatcher : IMessageDispatcher
                         _logger.LogError(e, "consumer received message error");
                     }
 
-                    await Retry(isConsumeSuccess, message, consumer.Value, cancellationToken);
+                    try
+                    {
+                        await Retry(isConsumeSuccess, message, consumer , cancellationToken);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.LogError(e, "retry message error {MessageOptionsTopic}", messageOptions.Topic);
+                    }
                 }
 
                 await Task.Delay(_options.Value.PollingInterval, cancellationToken);
@@ -121,7 +151,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
             var retryCount = consumer.Config.RetryCount ?? _options.Value.GlobalRetryCount;
 
             // dont need retry
-            if (!retryCount.HasValue || retryCount.Value == 0)
+            if (retryCount is null or 0)
             {
                 if (_options.Value.EnablePersistent)
                     await _persistStorage!.RemoveAsync(message);
@@ -148,7 +178,6 @@ public class DefaultMessageDispatcher : IMessageDispatcher
             // retry again
             else
             {
-                // todo : add delay
                 EnqueueRetryQueue(message);
 
                 if (_options.Value.EnablePersistent)
@@ -180,7 +209,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
                 throw new ArgumentOutOfRangeException();
         }
 
-        _retryChannel.Enqueue(message, DateTime.UtcNow.Add(delay).Ticks);
+        _retryChannel.Enqueue(message, DateTime.Now.Add(delay).Ticks);
     }
 
     private async Task RestoreMessagesAsync(CancellationToken cancellationToken)
@@ -189,15 +218,14 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
         foreach (var message in messages)
         {
-            if (!_channels.ContainsKey(message.GetTopic()))
+            if (!_channels.ContainsKey(message.GetTopic()!))
             {
-                _logger.LogWarning(
-                    $"message {message.GetMessageId()} topic {message.GetTopic()} not found matched channel");
+                _logger.LogWarning("message {MessageId} topic {Topic} not found matched channel", message.GetMessageId(), message.GetTopic());
 
                 continue;
             }
 
-            var channel = _channels[message.GetTopic()];
+            var channel = _channels[message.GetTopic()!];
 
             await channel.Writer.WriteAsync(message, cancellationToken);
         }
@@ -205,11 +233,11 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
     private void InitConsumers()
     {
-        var consumers = _serviceProvider.GetServices<IMessageConsumer>();
+        var consumerOptions = _consumerFactory.ConsumerOptions;
 
-        foreach (var consumer in consumers)
+        foreach (var consumerOption in consumerOptions)
         {
-            if (_channels.ContainsKey(consumer.Config.Topic))
+            if (_channels.ContainsKey(consumerOption.Key))
                 continue;
 
             var channel = Channel.CreateBounded<IMessage>(new BoundedChannelOptions(_options.Value.GlobalMaxChannelSize)
@@ -219,11 +247,9 @@ public class DefaultMessageDispatcher : IMessageDispatcher
                 FullMode = _options.Value.GlobalBoundedChannelFullMode
             });
 
-            _consumers.Add(consumer.Config.Topic, consumer);
+            _logger.LogDebug("Add channel for topic {ConfigTopic}", consumerOption.Key);
 
-            _logger.LogDebug($"Add channel for topic {consumer.Config.Topic}");
-
-            _channels.TryAdd(consumer.Config.Topic, channel);
+            _channels.TryAdd(consumerOption.Key, channel);
         }
     }
 
@@ -232,7 +258,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         return Task.CompletedTask;
     }
 
-    public async ValueTask EnqueueAsync(IMessage message)
+    public async ValueTask<bool> EnqueueAsync(IMessage message)
     {
         if (string.IsNullOrEmpty(message.GetTopic()))
             throw new ArgumentException("message topic should not be empty!");
@@ -244,15 +270,18 @@ public class DefaultMessageDispatcher : IMessageDispatcher
             throw new ArgumentException("message create time should not be empty!");
 
 
-        if (_options.Value.EnablePersistent)
+        if (_options.Value.EnablePersistent && message.GetRetryCount() is null or 0)
             await _persistStorage!.AddAsync(message);
 
         _channels.TryGetValue(message.GetTopic()!, out var channel);
 
         if (channel is null)
-            throw new ArgumentException(
-                $"message topic {message.GetTopic()} not found matched channel, please check your consumer registration!");
+        {
+            _logger.LogWarning("message topic {Topic} not found matched channel, please check your consumer registration!", message.GetTopic());
+           
+            return false;
+        }
 
-        channel!.Writer.TryWrite(message);
+        return channel.Writer.TryWrite(message);
     }
 }

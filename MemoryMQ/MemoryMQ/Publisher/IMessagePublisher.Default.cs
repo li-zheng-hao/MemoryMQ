@@ -1,27 +1,26 @@
-﻿using Microsoft.Extensions.Options;
+﻿using MemoryMQ.Dispatcher;
+using MemoryMQ.Messages;
 
-namespace MemoryMQ;
+namespace MemoryMQ.Publisher;
 
-public class MessagePublisher:IMessagePublisher
+public class MessagePublisher : IMessagePublisher
 {
     private readonly IMessageDispatcher _dispatcher;
-    private readonly IPersistStorage? _persistStorage;
-    private readonly IOptions<MemoryMQOptions> _options;
 
-    public MessagePublisher(IMessageDispatcher dispatcher,IOptions<MemoryMQOptions> options,IPersistStorage? persistStorage=null)
+    public MessagePublisher(IMessageDispatcher dispatcher)
     {
         _dispatcher = dispatcher;
-        _persistStorage = persistStorage;
-        _options = options;
     }
-    public async ValueTask PublishAsync(IMessage message)
+
+    public ValueTask<bool> PublishAsync(IMessage message)
     {
-       await _dispatcher.EnqueueAsync(message);
+        return _dispatcher.EnqueueAsync(message);
     }
-    
-    public async ValueTask PublishAsync(string topic,string body)
+
+    public ValueTask<bool> PublishAsync(string topic, string body)
     {
-        var message = new Message(topic,body);
-        await PublishAsync(message);
+        var message = new Message(topic, body);
+        
+        return PublishAsync(message);
     }
 }

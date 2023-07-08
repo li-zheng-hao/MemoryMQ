@@ -1,4 +1,6 @@
-﻿namespace MemoryMQ;
+﻿using MemoryMQ.Messages;
+
+namespace MemoryMQ.Dispatcher;
 
 public interface IMessageDispatcher
 {
@@ -15,11 +17,11 @@ public interface IMessageDispatcher
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     Task StopDispatchAsync(CancellationToken cancellationToken);
-    
+
     /// <summary>
     /// 添加消息
     /// </summary>
     /// <param name="message"></param>
     /// <returns></returns>
-    ValueTask EnqueueAsync(IMessage message);
+    ValueTask<bool> EnqueueAsync(IMessage message);
 }

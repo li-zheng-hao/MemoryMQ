@@ -1,4 +1,4 @@
-﻿namespace MemoryMQ;
+﻿namespace MemoryMQ.Messages;
 
 public class MessageHeader
 {
@@ -15,7 +15,7 @@ public class MessageHeader
     /// <summary>
     /// 重试次数
     /// </summary>
-    public const string Retry = "0";
+    public const string Retry = "retry";
 
     /// <summary>
     /// 创建时间 从1970-01-01 00:00:00到现在的UTC秒数
@@ -37,7 +37,7 @@ public static class MessageExtension
 
     public static string? GetCreateTime(this IMessage message)
     {
-        return message.Header.TryGetValue(MessageHeader.Topic, out var createTime) ? createTime : null;
+        return message.Header.TryGetValue(MessageHeader.CreatTime, out var createTime) ? createTime : null;
     }
 
     public static int? GetRetryCount(this IMessage message)

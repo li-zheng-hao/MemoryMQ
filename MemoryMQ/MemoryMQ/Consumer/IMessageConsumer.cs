@@ -1,4 +1,7 @@
-﻿namespace MemoryMQ;
+﻿using MemoryMQ.Configuration;
+using MemoryMQ.Messages;
+
+namespace MemoryMQ.Consumer;
 
 public interface IMessageConsumer
 {

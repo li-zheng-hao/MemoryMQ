@@ -5,6 +5,14 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <LangVersion>10</LangVersion>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <Version>0.0.1</Version>
+        <Title>MemoryMQ</Title>
+        <Authors>lizhenghao</Authors>
+        <PackageProjectUrl>https://github.com/li-zheng-hao/MemoryMQ</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/li-zheng-hao/MemoryMQ</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>

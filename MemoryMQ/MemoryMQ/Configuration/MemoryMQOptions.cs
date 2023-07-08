@@ -1,9 +1,15 @@
-﻿using System.Threading.Channels;
+﻿using System.Reflection;
+using System.Threading.Channels;
 
-namespace MemoryMQ;
+namespace MemoryMQ.Configuration;
 
 public class MemoryMQOptions
 {
+    /// <summary>
+    /// 消费者所在的程序集
+    /// </summary>
+    public Assembly[] ConsumerAssemblies { get; set; } = { Assembly.GetEntryAssembly()! };
+    
     /// <summary>
     /// 全局每条队列的最大队列长度
     /// </summary>

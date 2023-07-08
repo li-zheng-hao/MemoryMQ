@@ -1,19 +1,19 @@
 ﻿using System.Data.SQLite;
 using System.Text;
 using System.Text.Json;
+using MemoryMQ.Configuration;
+using MemoryMQ.Messages;
 using Microsoft.Extensions.Options;
 
-namespace MemoryMQ;
+namespace MemoryMQ.Storage;
 
 public class SqlitePersistStorage : IPersistStorage
 {
-    private readonly IOptions<MemoryMQOptions> _options;
     private SQLiteConnection _connection;
 
     public SqlitePersistStorage(IOptions<MemoryMQOptions> options)
     {
-        _options = options;
-        _connection = new SQLiteConnection(_options.Value.DbConnectionString);
+        _connection = new SQLiteConnection(options.Value.DbConnectionString);
         _connection.Open();
         CreateTable();
     }
@@ -30,7 +30,7 @@ create table if not exists memorymq_message
     message     TEXT    not null,
     message_id  TEXT    not null,
     create_time INTEGER not null,
-    retry INTEGER not null default 0,
+    retry       INTEGER not null 
 );
 
 create unique index if not exists memorymq_message_message_id_index 

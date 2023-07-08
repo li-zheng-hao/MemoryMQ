@@ -26,3 +26,4 @@ backend_core/FB.NxApp.sln.DotSettings.user
 backend_core/FB.AppSrv.sln.DotSettings.user
 backend_core/global.json
 MemoryMQ/.idea/
+*.db

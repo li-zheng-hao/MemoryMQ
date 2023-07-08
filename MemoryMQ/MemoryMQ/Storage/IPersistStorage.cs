@@ -1,4 +1,6 @@
-﻿namespace MemoryMQ;
+﻿using MemoryMQ.Messages;
+
+namespace MemoryMQ.Storage;
 
 public interface IPersistStorage:IDisposable
 {

@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 
-namespace MemoryMQ;
+namespace MemoryMQ.Configuration;
 
 public class MemoryMQOptionsValidation:IValidateOptions<MemoryMQOptions>
 {

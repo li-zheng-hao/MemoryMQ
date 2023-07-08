@@ -1,4 +1,6 @@
 using MemoryMQ;
+using MemoryMQ.Configuration;
+using MemoryMQ.Consumer;
 using MemoryMQ.Webapi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,11 +11,16 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddMemoryMQ(it => { 
+builder.Services.AddMemoryMQ(it =>
+{
     it.EnablePersistent = true;
-    it.PollingInterval = TimeSpan.FromSeconds(2);
+    it.RetryMode = RetryMode.Incremental;
+    it.RetryInterval = TimeSpan.FromSeconds(5);
 });
-// builder.Services.AddSingleton<IMessageConsumer, ConsumerA>();
+
+builder.Services.AddScoped<ConsumerA>();
+builder.Services.AddScoped<ConsumerB>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
