@@ -5,14 +5,16 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <LangVersion>10</LangVersion>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <Version>0.0.1</Version>
+        <Version>0.0.2</Version>
         <Title>MemoryMQ</Title>
         <Authors>lizhenghao</Authors>
         <PackageProjectUrl>https://github.com/li-zheng-hao/MemoryMQ</PackageProjectUrl>
         <RepositoryUrl>https://github.com/li-zheng-hao/MemoryMQ</RepositoryUrl>
+        <Description>基于内存的消息队列</Description>
     </PropertyGroup>
 
     <ItemGroup>
