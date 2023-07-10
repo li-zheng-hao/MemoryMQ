@@ -13,6 +13,11 @@
 支持.NET 6及以上项目，使用方式：
 
 1. 引入依赖库
+
+```shell
+dotnet add package MemoryMQ
+```
+
 2. 注册服务及消费者
 
 ```c#
