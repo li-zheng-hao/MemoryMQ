@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using MemoryMQ.Configuration;
 using MemoryMQ.Consumer;
 using MemoryMQ.Messages;
+using MemoryMQ.RetryStrategy;
 using MemoryMQ.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -13,28 +14,67 @@ namespace MemoryMQ.Dispatcher;
 public class DefaultMessageDispatcher : IMessageDispatcher
 {
     private readonly ILogger<DefaultMessageDispatcher> _logger;
+
     private readonly IOptions<MemoryMQOptions> _options;
+
     private readonly IPersistStorage? _persistStorage;
+
     private readonly IServiceProvider _serviceProvider;
+
     private readonly IConsumerFactory _consumerFactory;
+
+    private readonly IRetryStrategy _retryStrategy;
 
     private readonly ConcurrentDictionary<string, Channel<IMessage>> _channels = new();
 
-    /// <summary>
-    /// 重试队列 如果重启则该队列会清空 所有消息会重新开始消费
-    /// </summary>
-    private readonly PriorityQueue<IMessage, long> _retryChannel = new();
 
     public DefaultMessageDispatcher(ILogger<DefaultMessageDispatcher> logger, IOptions<MemoryMQOptions> options,
         IServiceProvider serviceProvider,
         IConsumerFactory consumerFactory,
-        IPersistStorage? persistStorage = null)
+        IRetryStrategy retryStrategy,
+        IPersistStorage persistStorage = null)
     {
         _logger = logger;
         _options = options;
         _persistStorage = persistStorage;
         _serviceProvider = serviceProvider;
         _consumerFactory = consumerFactory;
+        _retryStrategy = retryStrategy;
+
+        retryStrategy.MessageRetryEvent = RetryMessageAsync;
+    }
+
+
+    public Task StopDispatchAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask<bool> EnqueueAsync(IMessage message)
+    {
+        if (string.IsNullOrEmpty(message.GetTopic()))
+            throw new ArgumentException("message topic should not be empty!");
+
+        if (string.IsNullOrEmpty(message.GetMessageId()))
+            throw new ArgumentException("message id should not be empty!");
+
+        if (string.IsNullOrEmpty(message.GetCreateTime()))
+            throw new ArgumentException("message create time should not be empty!");
+
+
+        if (_options.Value.EnablePersistent && message.GetRetryCount() is null or 0)
+            await _persistStorage!.AddAsync(message);
+
+        _channels.TryGetValue(message.GetTopic()!, out var channel);
+
+        if (channel is null)
+        {
+            _logger.LogWarning("message topic {Topic} not found matched channel, please check your consumer registration!", message.GetTopic());
+
+            return false;
+        }
+
+        return channel.Writer.TryWrite(message);
     }
 
     public async Task StartDispatchAsync(CancellationToken cancellationToken)
@@ -44,31 +84,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         if (_options.Value.EnablePersistent)
             await RestoreMessagesAsync(cancellationToken);
 
-        RunRetry(cancellationToken);
-
         RunDispatch(cancellationToken);
-    }
-
-    private void RunRetry(CancellationToken cancellationToken)
-    {
-        Task.Factory.StartNew(async () =>
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                while (_retryChannel.TryPeek(out _, out var ticks))
-                {
-                    if (ticks >= DateTime.Now.Ticks) continue;
-                    
-                    _retryChannel.TryDequeue(out var msg, out _);
-
-                    if (msg is null) continue;
-
-                    await EnqueueAsync(msg);
-                }
-
-                await Task.Delay(500, cancellationToken);
-            }
-        }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     private void RunDispatch(CancellationToken cancellationToken)
@@ -95,17 +111,18 @@ public class DefaultMessageDispatcher : IMessageDispatcher
                 while (channel!.Reader.CanPeek && channel.Reader.TryRead(out var message))
                 {
                     using var scope = _serviceProvider.CreateScope();
-                    
-                    var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider,messageOptions.Topic);
-                    
+
+                    var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider, messageOptions.Topic);
+
                     if (consumer is null)
                     {
                         _logger.LogWarning("{MessageOptionsTopic} consumer is null", messageOptions.Topic);
-                        
+
                         continue;
                     }
-                    
+
                     bool isConsumeSuccess = true;
+
                     try
                     {
                         await consumer.ReceivedAsync(message, cancellationToken);
@@ -119,7 +136,12 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
                     try
                     {
-                        await Retry(isConsumeSuccess, message, consumer , cancellationToken);
+                        if (isConsumeSuccess)
+                        {
+                            if (_options.Value.EnablePersistent) await _persistStorage!.RemoveAsync(message);
+                        }
+                        else
+                            await _retryStrategy.ScheduleRetry(message, consumer, cancellationToken);
                     }
                     catch (Exception e)
                     {
@@ -134,82 +156,6 @@ public class DefaultMessageDispatcher : IMessageDispatcher
                 _logger.LogError(e, "poll and consume message error");
             }
         }
-    }
-
-    private async Task Retry(bool isConsumeSuccess, IMessage message, IMessageConsumer consumer,
-        CancellationToken cancellationToken)
-    {
-        if (isConsumeSuccess)
-        {
-            if (_options.Value.EnablePersistent)
-                await _persistStorage!.RemoveAsync(message);
-        }
-        else
-        {
-            message.IncreaseRetryCount();
-
-            var retryCount = consumer.Config.RetryCount ?? _options.Value.GlobalRetryCount;
-
-            // dont need retry
-            if (retryCount is null or 0)
-            {
-                if (_options.Value.EnablePersistent)
-                    await _persistStorage!.RemoveAsync(message);
-                return;
-            }
-
-            // retry failure
-            if (message.GetRetryCount() > retryCount)
-            {
-                try
-                {
-                    await consumer.FailureRetryAsync(message, cancellationToken);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e, "consumer process failure message error");
-                }
-                finally
-                {
-                    if (_options.Value.EnablePersistent)
-                        await _persistStorage!.RemoveAsync(message);
-                }
-            }
-            // retry again
-            else
-            {
-                EnqueueRetryQueue(message);
-
-                if (_options.Value.EnablePersistent)
-                {
-                    await _persistStorage!.UpdateRetryAsync(message);
-                }
-            }
-        }
-    }
-
-    private void EnqueueRetryQueue(IMessage message)
-    {
-        var retryCount = message.GetRetryCount()!;
-
-        TimeSpan delay;
-
-        switch (_options.Value.RetryMode)
-        {
-            case RetryMode.Fixed:
-                delay = _options.Value.RetryInterval;
-                break;
-            case RetryMode.Exponential:
-                delay = _options.Value.RetryInterval * Math.Pow(2, retryCount.Value);
-                break;
-            case RetryMode.Incremental:
-                delay = _options.Value.RetryInterval * retryCount.Value;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
-
-        _retryChannel.Enqueue(message, DateTime.Now.Add(delay).Ticks);
     }
 
     private async Task RestoreMessagesAsync(CancellationToken cancellationToken)
@@ -253,35 +199,13 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         }
     }
 
-    public Task StopDispatchAsync(CancellationToken cancellationToken)
+    private async Task RetryMessageAsync(IMessage msg)
     {
-        return Task.CompletedTask;
-    }
+        var retry = await EnqueueAsync(msg);
 
-    public async ValueTask<bool> EnqueueAsync(IMessage message)
-    {
-        if (string.IsNullOrEmpty(message.GetTopic()))
-            throw new ArgumentException("message topic should not be empty!");
-
-        if (string.IsNullOrEmpty(message.GetMessageId()))
-            throw new ArgumentException("message id should not be empty!");
-
-        if (string.IsNullOrEmpty(message.GetCreateTime()))
-            throw new ArgumentException("message create time should not be empty!");
-
-
-        if (_options.Value.EnablePersistent && message.GetRetryCount() is null or 0)
-            await _persistStorage!.AddAsync(message);
-
-        _channels.TryGetValue(message.GetTopic()!, out var channel);
-
-        if (channel is null)
+        if (!retry)
         {
-            _logger.LogWarning("message topic {Topic} not found matched channel, please check your consumer registration!", message.GetTopic());
-           
-            return false;
+            _logger.LogError("message {MessageId} enqueue failed", msg.GetMessageId());
         }
-
-        return channel.Writer.TryWrite(message);
     }
 }

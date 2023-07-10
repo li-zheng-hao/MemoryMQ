@@ -14,12 +14,15 @@ public class ConsumerA : IMessageConsumer,IDisposable
         _logger.LogInformation("ConsumerA init at {Now}", DateTime.Now);
     }
 
-    public MessageOptions Config { get; } = new MessageOptions()
+    public MessageOptions GetMessageConfig()
     {
-        Topic = "topic-a",
-        ParallelNum = 5,
-        RetryCount = 3
-    };
+        return new MessageOptions()
+        {
+            Topic = "topic-a",
+            ParallelNum = 5,
+            RetryCount = 3
+        };
+    }
 
     public Task ReceivedAsync(IMessage message, CancellationToken cancellationToken)
     {

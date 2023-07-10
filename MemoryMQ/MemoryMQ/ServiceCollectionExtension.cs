@@ -2,6 +2,7 @@
 using MemoryMQ.Consumer;
 using MemoryMQ.Dispatcher;
 using MemoryMQ.Publisher;
+using MemoryMQ.RetryStrategy;
 using MemoryMQ.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -25,6 +26,8 @@ public static class ServiceCollectionExtension
         serviceCollection.AddHostedService<DispatcherService>();
 
         serviceCollection.AddSingleton<IMessagePublisher, MessagePublisher>();
+
+        serviceCollection.AddSingleton<IRetryStrategy, DefaultRetryStrategy>();
 
         MemoryMQOptions memoryMqOptions = new MemoryMQOptions();
 

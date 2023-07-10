@@ -45,12 +45,15 @@ public class ConsumerA : IMessageConsumer
         _logger = logger;
     }
 
-    public MessageOptions Config { get; } = new MessageOptions()
+    public MessageOptions GetMessageConfig()
     {
-        Topic = "topic-a",
-        ParallelNum = 5,
-        RetryCount = 3
-    };
+        return new MessageOptions()
+        {
+            Topic = "topic-a",
+            ParallelNum = 5,
+            RetryCount = 3
+        };
+    }
 
     public Task ReceivedAsync(IMessage message, CancellationToken cancellationToken)
     {

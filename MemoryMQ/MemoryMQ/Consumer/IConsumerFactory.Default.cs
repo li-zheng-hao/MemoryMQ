@@ -33,8 +33,8 @@ public class DefaultConsumerFactory : IConsumerFactory
                 if (scope.ServiceProvider.GetService(consumerType) is not IMessageConsumer consumer) 
                     continue;
              
-                Consumers.Add(consumer.Config.Topic, consumer.GetType());
-                ConsumerOptions.Add(consumer.Config.Topic, consumer.Config);
+                Consumers.Add(consumer.GetMessageConfig().Topic, consumer.GetType());
+                ConsumerOptions.Add(consumer.GetMessageConfig().Topic, consumer.GetMessageConfig());
             }
         }
     }

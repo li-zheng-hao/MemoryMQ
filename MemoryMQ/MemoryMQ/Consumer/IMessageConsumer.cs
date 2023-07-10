@@ -5,7 +5,11 @@ namespace MemoryMQ.Consumer;
 
 public interface IMessageConsumer
 {
-    MessageOptions Config { get; }
+    /// <summary>
+    /// 获取消费者配置
+    /// </summary>
+    /// <returns></returns>
+    MessageOptions GetMessageConfig(); 
 
     /// <summary>
     /// 处理消息

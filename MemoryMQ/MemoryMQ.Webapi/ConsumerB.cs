@@ -15,12 +15,15 @@ public class ConsumerB : IMessageConsumer
         logger.LogInformation("ConsumerB init");
     }
 
-    public MessageOptions Config { get; } = new MessageOptions()
+    public MessageOptions GetMessageConfig()
     {
-        Topic = "topic-b",
-        ParallelNum = 1,
-        RetryCount = 3
-    };
+        return new MessageOptions()
+        {
+            Topic = "topic-b",
+            ParallelNum = 1,
+            RetryCount = 3
+        };
+    }
 
     public Task ReceivedAsync(IMessage message, CancellationToken cancellationToken)
     {
