@@ -2,47 +2,47 @@
 
 [中文](README_CN.md)|[English](README.md)
 
-# Introduction
+# 介绍
 
-A memory-based(`System.Threading.Channels`) message queue library , primarily designed for simple monolithic projects that do not want to introduce dependencies like RabbitMQ but still need a messaging queue with the following features:
+一个基于内存（`System.Threading.Channels`）的消息队列库，主要适用的目标是一些非常简单的单体项目，不希望引入RabbitMQ等依赖的同时又希望有一个消息队列，支持功能：
 
-1. Retry on failure (fixed interval, incremental interval, exponential interval)
-2. Message persistence
-3. Control over the concurrency of each consumer
+1. 失败重试（固定间隔、递增间隔、指数间隔）
+2. 消息持久化
+3. 控制每个消费者的并发数
 
-# Usage
+# 使用方式
 
-Supports .NET 6 and above projects. Usage:
+支持.NET 6及以上项目，使用方式：
 
-1. add nuget library
+1. 引入依赖库
 
 ```shell
 dotnet add package MemoryMQ
 ```
 
-2. register services and consumers
+2. 注册服务及消费者
 
 ```c#
 builder.Services.AddMemoryMQ(it =>
 {
-    // support persistent, only Sqlite
+    // 是否开启持久化 目前仅支持Sqlite
     it.EnablePersistent = true;
-    
+    // 重试策略
     it.RetryMode = RetryMode.Incremental;
-    
+    // 重试间隔
     it.RetryInterval = TimeSpan.FromSeconds(5);
 });
 
-// add consumers, use Scoped lifetime
+// 添加消费者,注意用Scoped生命周期
 builder.Services.AddScoped<ConsumerA>();
 builder.Services.AddScoped<ConsumerB>();
 ```
 
-3. configure consumers
+3. 配置消费者
 
 ```c#
 
-// implement IMessageConsumer interface
+// 实现IMessageConsumer接口
 public class ConsumerA : IMessageConsumer
 {
     private readonly ILogger<ConsumerA> _logger;
@@ -76,7 +76,7 @@ public class ConsumerA : IMessageConsumer
 }
 ```
 
-4. send message
+4. 发送消息
 
 ```c#
 
@@ -92,4 +92,3 @@ await publisher.SendAsync(message);
 // or this way
 await publisher.SendAsync("topic-a","hello world");
 ```
-
