@@ -4,7 +4,7 @@
 
 # Introduction
 
-A memory-based(`System.Threading.Channels`) message queue library , primarily designed for simple monolithic projects that do not want to introduce dependencies like RabbitMQ but still need a messaging queue with the following features:
+A memory-based(`System.Threading.Channels`) message queue library , primarily designed for simple standalone projects that do not want to introduce dependencies like RabbitMQ but still need a messaging queue with the following features:
 
 1. Retry on failure (fixed interval, incremental interval, exponential interval)
 2. Message persistence
