@@ -2,18 +2,24 @@
 
 namespace MemoryMQ.Storage;
 
-public interface IPersistStorage:IDisposable
+public interface IPersistStorage
 {
+    /// <summary>
+    /// create table if not exists
+    /// </summary>
+    /// <returns></returns>
+    Task CreateTableAsync();
+    
     /// <summary>
     /// update retry count
     /// </summary>
     /// <param name="message"></param>
     /// <returns></returns>
-    Task UpdateRetryAsync(IMessage message);
+    Task<bool> UpdateRetryAsync(IMessage message);
     
-    Task AddAsync(IMessage message);
+    Task<bool> AddAsync(IMessage message);
     
-    Task RemoveAsync(IMessage message);
+    Task<bool> RemoveAsync(IMessage message);
     
     /// <summary>
     /// 恢复
@@ -25,5 +31,5 @@ public interface IPersistStorage:IDisposable
     /// 存储
     /// </summary>
     /// <param name="message"></param>
-    Task SaveAsync(ICollection<IMessage> message);
+    Task<bool> SaveAsync(ICollection<IMessage> message);
 }

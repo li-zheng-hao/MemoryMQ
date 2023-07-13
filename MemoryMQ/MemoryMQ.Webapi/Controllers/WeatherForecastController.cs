@@ -25,7 +25,7 @@ public class WeatherForecastController : ControllerBase
     public async Task<IActionResult> Test(string body)
     {
         await _messagePublisher.PublishAsync("topic-a", body);
-        // await _messagePublisher.PublishAsync("topic-b", body);
+        await _messagePublisher.PublishAsync("topic-b", body);
         return Ok();
     }
 }

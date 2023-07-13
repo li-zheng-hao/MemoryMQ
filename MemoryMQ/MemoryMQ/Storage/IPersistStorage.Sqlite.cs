@@ -9,18 +9,16 @@ namespace MemoryMQ.Storage;
 
 public class SqlitePersistStorage : IPersistStorage
 {
-    private SQLiteConnection _connection;
+    private readonly SQLiteConnection _connection;
 
-    public SqlitePersistStorage(IOptions<MemoryMQOptions> options)
+    public SqlitePersistStorage(IOptions<MemoryMQOptions> options,SQLiteConnection connection)
     {
-        _connection = new SQLiteConnection(options.Value.DbConnectionString);
-        _connection.Open();
-        CreateTable();
+        _connection = connection;
     }
 
-    private void CreateTable()
+    public  async Task CreateTableAsync()
     {
-        SQLiteCommand cmd = new SQLiteCommand(_connection);
+        await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = @"
 create table if not exists memorymq_message
 (
@@ -36,36 +34,37 @@ create table if not exists memorymq_message
 create unique index if not exists memorymq_message_message_id_index 
     on memorymq_message (message_id);
         ";
-        cmd.ExecuteNonQuery();
+
+        await cmd.ExecuteNonQueryAsync();
     }
 
-    public Task UpdateRetryAsync(IMessage message)
+    public async Task<bool> UpdateRetryAsync(IMessage message)
     {
-        SQLiteCommand cmd = new SQLiteCommand(_connection);
+        await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = $@"update memorymq_message set retry={message.GetRetryCount()} where message_id='{message.GetMessageId()}';";
-        return cmd.ExecuteNonQueryAsync();
+        return (await cmd.ExecuteNonQueryAsync())>0;
     }
 
-    public Task AddAsync(IMessage message)
+    public async Task<bool> AddAsync(IMessage message)
     {
         var data = JsonSerializer.Serialize(message);
-        SQLiteCommand cmd = new SQLiteCommand(_connection);
+        await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = $@"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{message.GetMessageId()}',{message.GetCreateTime()},{message.GetRetryCount()});";
-        return cmd.ExecuteNonQueryAsync();
+        return (await cmd.ExecuteNonQueryAsync()) > 0;
     }
 
-    public Task RemoveAsync(IMessage message)
+    public async Task<bool> RemoveAsync(IMessage message)
     {
-        SQLiteCommand cmd = new SQLiteCommand(_connection);
+        await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = $@"delete from memorymq_message where message_id='{message.GetMessageId()}';";
-        return cmd.ExecuteNonQueryAsync();
+        return (await cmd.ExecuteNonQueryAsync())>0;
     }
 
     public async Task<IEnumerable<IMessage>> RestoreAsync()
     {
-        SQLiteCommand cmd = new SQLiteCommand(_connection);
+        await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = @"select message from memorymq_message order by create_time asc;";
-        var reader = cmd.ExecuteReader();
+        await using var reader = cmd.ExecuteReader();
         var messages = new List<IMessage>();
         while (await reader.ReadAsync())
         {
@@ -77,22 +76,18 @@ create unique index if not exists memorymq_message_message_id_index
         return messages;
     }
 
-    public Task SaveAsync(ICollection<IMessage> message)
+    public async Task<bool> SaveAsync(ICollection<IMessage> message)
     {
        
         StringBuilder sb=new StringBuilder();
         foreach (var m in message)
         {
             var data = JsonSerializer.Serialize(m);
-            sb.Append($"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}',{m.GetMessageId()},{m.GetCreateTime()},{m.GetRetryCount()});");
+            sb.Append($"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{m.GetMessageId()}',{m.GetCreateTime()},{m.GetRetryCount()});");
         }
-        SQLiteCommand cmd = new SQLiteCommand(_connection);
+        await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = sb.ToString();
-        return cmd.ExecuteNonQueryAsync();
+        return (await cmd.ExecuteNonQueryAsync())==message.Count;
     }
 
-    public void Dispose()
-    {
-        _connection.Dispose();
-    }
 }

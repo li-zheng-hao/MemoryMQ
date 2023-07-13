@@ -3,52 +3,55 @@ using System.Threading.Channels;
 
 namespace MemoryMQ.Configuration;
 
+/// <summary>
+/// MemoryMQ options
+/// </summary>
 public class MemoryMQOptions
 {
     /// <summary>
-    /// 消费者所在的程序集
+    /// consumer assemblies
     /// </summary>
     public Assembly[] ConsumerAssemblies { get; set; } = { Assembly.GetEntryAssembly()! };
     
     /// <summary>
-    /// 全局每条队列的最大队列长度
+    /// global channel max size
     /// </summary>
     public int GlobalMaxChannelSize { get; set; } = 10000;
 
     /// <summary>
-    /// 队列满时的处理方式 默认等待
+    /// behavior when channel is full, default is wait
     /// </summary>
     public BoundedChannelFullMode GlobalBoundedChannelFullMode { get; set; } = BoundedChannelFullMode.Wait;
 
     /// <summary>
-    /// 拉取消息的间隔
+    /// interval to poll message from queue
     /// </summary>
     public TimeSpan PollingInterval { get; set; } = TimeSpan.FromMilliseconds(500);
 
     /// <summary>
-    /// 是否开启持久化，默认开启
-    /// 开启后每条消息都会持久化到磁盘，能够保证消息至少消费一次，但是会影响性能
+    /// enable persistent (only support sqlite), default is true
     /// </summary>
     public bool EnablePersistent { get; set; } = true;
 
     /// <summary>
-    /// 数据库连接字符串
+    /// database connection string (now only support sqlite), default is 'data source=memorymq.db'
     /// </summary>
     public string DbConnectionString { get; set; } = "data source=memorymq.db";
 
 
     /// <summary>
-    /// 全局重试次数 null或0表示不重试 
+    /// global retry count, null or 0 means no retry
     /// </summary>
     public uint? GlobalRetryCount { get; set; } = 3; 
     
     /// <summary>
-    /// 重试间隔
+    /// retry interval, default is 10 seconds
     /// </summary>
     public TimeSpan RetryInterval { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// 重试类型
+    /// retry mode, default is fixed
+    /// <see cref="RetryMode"/>
     /// </summary>
     public RetryMode RetryMode { get; set; } = RetryMode.Fixed;
 }

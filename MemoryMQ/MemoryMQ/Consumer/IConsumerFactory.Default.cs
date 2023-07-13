@@ -1,19 +1,23 @@
 ﻿using MemoryMQ.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace MemoryMQ.Consumer;
 
 public class DefaultConsumerFactory : IConsumerFactory
 {
+    private readonly ILogger<DefaultConsumerFactory> _logger;
+
     private readonly IOptions<MemoryMQOptions> _options;
 
     public Dictionary<string, Type> Consumers { get; init; }
 
     public Dictionary<string, MessageOptions> ConsumerOptions { get; init; }
 
-    public DefaultConsumerFactory(IServiceProvider serviceProvider, IOptions<MemoryMQOptions> options)
+    public DefaultConsumerFactory(ILogger<DefaultConsumerFactory> logger,IServiceProvider serviceProvider, IOptions<MemoryMQOptions> options)
     {
+        _logger = logger;
         _options = options;
         Consumers = new Dictionary<string, Type>();
         ConsumerOptions = new();
@@ -37,6 +41,10 @@ public class DefaultConsumerFactory : IConsumerFactory
                 ConsumerOptions.Add(consumer.GetMessageConfig().Topic, consumer.GetMessageConfig());
             }
         }
+        
+        if(!Consumers.Any())
+            _logger.LogWarning("no consumer found!");
+            
     }
 
     public virtual IMessageConsumer? CreateConsumer(IServiceProvider serviceProvider, string topic)

@@ -27,6 +27,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
     private readonly ConcurrentDictionary<string, Channel<IMessage>> _channels = new();
 
+    private CancellationToken _cancelToken;
 
     public DefaultMessageDispatcher(ILogger<DefaultMessageDispatcher> logger, IOptions<MemoryMQOptions> options,
         IServiceProvider serviceProvider,
@@ -42,8 +43,8 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         _retryStrategy = retryStrategy;
 
         retryStrategy.MessageRetryEvent = RetryMessageAsync;
+        retryStrategy.MessageRetryFailureEvent = RetryMessageFailureAsync;
     }
-
 
     public Task StopDispatchAsync(CancellationToken cancellationToken)
     {
@@ -61,10 +62,6 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         if (string.IsNullOrEmpty(message.GetCreateTime()))
             throw new ArgumentException("message create time should not be empty!");
 
-
-        if (_options.Value.EnablePersistent && message.GetRetryCount() is null or 0)
-            await _persistStorage!.AddAsync(message);
-
         _channels.TryGetValue(message.GetTopic()!, out var channel);
 
         if (channel is null)
@@ -74,11 +71,29 @@ public class DefaultMessageDispatcher : IMessageDispatcher
             return false;
         }
 
+        if (_options.Value.EnablePersistent && message.GetRetryCount() is null or 0)
+        {
+            var opResult = await _persistStorage!.AddAsync(message);
+
+            if (!opResult)
+            {
+                _logger.LogWarning("message {MessageId} enqueue to persistent storage failed!", message.GetMessageId());
+
+                return false;
+            }
+        }
+
         return channel.Writer.TryWrite(message);
+
     }
 
     public async Task StartDispatchAsync(CancellationToken cancellationToken)
     {
+        _cancelToken = cancellationToken;
+
+        if (_options.Value.EnablePersistent && _persistStorage is not null)
+            await _persistStorage.CreateTableAsync();
+
         InitConsumers();
 
         if (_options.Value.EnablePersistent)
@@ -89,17 +104,17 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
     private void RunDispatch(CancellationToken cancellationToken)
     {
-        foreach (var consumerOptions in _consumerFactory.ConsumerOptions)
+        foreach (var consumerOption in _consumerFactory.ConsumerOptions.Select(it => it.Value))
         {
-            for (var i = 0; i < consumerOptions.Value.ParallelNum; i++)
+            for (var i = 0; i < consumerOption.ParallelNum; i++)
             {
-                Task.Factory.StartNew(async () => await PollingMessage(consumerOptions.Value, cancellationToken), cancellationToken,
+                Task.Factory.StartNew(async () => await PollingMessage(consumerOption, cancellationToken), cancellationToken,
                     TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
         }
     }
 
-    private async Task PollingMessage(MessageOptions messageOptions,
+    async internal Task PollingMessage(MessageOptions messageOptions,
         CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
@@ -110,43 +125,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
                 while (channel!.Reader.CanPeek && channel.Reader.TryRead(out var message))
                 {
-                    using var scope = _serviceProvider.CreateScope();
-
-                    var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider, messageOptions.Topic);
-
-                    if (consumer is null)
-                    {
-                        _logger.LogWarning("{MessageOptionsTopic} consumer is null", messageOptions.Topic);
-
-                        continue;
-                    }
-
-                    bool isConsumeSuccess = true;
-
-                    try
-                    {
-                        await consumer.ReceivedAsync(message, cancellationToken);
-                    }
-                    catch (Exception e)
-                    {
-                        isConsumeSuccess = false;
-
-                        _logger.LogError(e, "consumer received message error");
-                    }
-
-                    try
-                    {
-                        if (isConsumeSuccess)
-                        {
-                            if (_options.Value.EnablePersistent) await _persistStorage!.RemoveAsync(message);
-                        }
-                        else
-                            await _retryStrategy.ScheduleRetry(message, consumer, cancellationToken);
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogError(e, "retry message error {MessageOptionsTopic}", messageOptions.Topic);
-                    }
+                    await ConsumeMessage(message, messageOptions, cancellationToken);
                 }
 
                 await Task.Delay(_options.Value.PollingInterval, cancellationToken);
@@ -158,7 +137,48 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         }
     }
 
-    private async Task RestoreMessagesAsync(CancellationToken cancellationToken)
+    async internal Task ConsumeMessage(IMessage message, MessageOptions messageOptions, CancellationToken cancellationToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+
+        var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider, messageOptions.Topic);
+
+        if (consumer is null)
+        {
+            _logger.LogWarning("{MessageOptionsTopic} consumer is null", messageOptions.Topic);
+
+            return;
+        }
+
+        bool isConsumeSuccess = true;
+
+        try
+        {
+            await consumer.ReceivedAsync(message, cancellationToken);
+        }
+        catch (Exception e)
+        {
+            isConsumeSuccess = false;
+
+            _logger.LogError(e, "consumer received message error");
+        }
+
+        try
+        {
+            if (isConsumeSuccess)
+            {
+                if (_options.Value.EnablePersistent) await _persistStorage!.RemoveAsync(message);
+            }
+            else
+                await _retryStrategy.ScheduleRetryAsync(message, consumer.GetMessageConfig(), cancellationToken);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "retry message error {MessageOptionsTopic}", messageOptions.Topic);
+        }
+    }
+
+    async internal Task RestoreMessagesAsync(CancellationToken cancellationToken)
     {
         var messages = await _persistStorage!.RestoreAsync();
 
@@ -181,9 +201,9 @@ public class DefaultMessageDispatcher : IMessageDispatcher
     {
         var consumerOptions = _consumerFactory.ConsumerOptions;
 
-        foreach (var consumerOption in consumerOptions)
+        foreach (var topic in consumerOptions.Select(it => it.Key))
         {
-            if (_channels.ContainsKey(consumerOption.Key))
+            if (_channels.ContainsKey(topic))
                 continue;
 
             var channel = Channel.CreateBounded<IMessage>(new BoundedChannelOptions(_options.Value.GlobalMaxChannelSize)
@@ -193,19 +213,42 @@ public class DefaultMessageDispatcher : IMessageDispatcher
                 FullMode = _options.Value.GlobalBoundedChannelFullMode
             });
 
-            _logger.LogDebug("Add channel for topic {ConfigTopic}", consumerOption.Key);
+            _logger.LogDebug("Add channel for topic {ConfigTopic}", topic);
 
-            _channels.TryAdd(consumerOption.Key, channel);
+            _channels.TryAdd(topic, channel);
         }
     }
 
-    private async Task RetryMessageAsync(IMessage msg)
+    async internal Task RetryMessageAsync(IMessage msg)
     {
         var retry = await EnqueueAsync(msg);
 
         if (!retry)
         {
             _logger.LogError("message {MessageId} enqueue failed", msg.GetMessageId());
+        }
+    }
+
+    async internal Task RetryMessageFailureAsync(IMessage message)
+    {
+        using var scope = _serviceProvider.CreateScope();
+
+        var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider, message.GetTopic());
+
+        if (consumer is null)
+        {
+            _logger.LogWarning("{MessageOptionsTopic} consumer is null", message.GetTopic());
+
+            return;
+        }
+
+        try
+        {
+            await consumer.FailureRetryAsync(message, _cancelToken);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "consumer received message error");
         }
     }
 }

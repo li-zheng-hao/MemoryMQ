@@ -1,24 +1,27 @@
 ﻿namespace MemoryMQ.Messages;
 
-public class MessageHeader
+/// <summary>
+/// message header payloads
+/// </summary>
+public static class MessageHeader
 {
     /// <summary>
-    /// 消息id
+    /// message id
     /// </summary>
     public const string MessageId = "message_id";
 
     /// <summary>
-    /// 主题
+    /// topic
     /// </summary>
     public const string Topic = "topic";
 
     /// <summary>
-    /// 重试次数
+    /// retry count
     /// </summary>
     public const string Retry = "retry";
 
     /// <summary>
-    /// 创建时间 从1970-01-01 00:00:00到现在的UTC秒数
+    /// create time , DateTime.Now.Ticks
     /// </summary>
     public const string CreatTime = "create_time";
 }

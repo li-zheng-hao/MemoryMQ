@@ -1,9 +1,6 @@
 ﻿using MemoryMQ.Configuration;
-using MemoryMQ.Consumer;
-using MemoryMQ.Dispatcher;
 using MemoryMQ.Messages;
 using MemoryMQ.Storage;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -19,25 +16,25 @@ public class DefaultRetryStrategy : IRetryStrategy
     private readonly IPersistStorage? _persistStorage;
 
     public Func<IMessage, Task> MessageRetryEvent { get; set; }
+    
+    public Func<IMessage, Task> MessageRetryFailureEvent { get; set; }
 
     /// <summary>
     /// 重试队列 如果重启则该队列会清空 所有消息会重新开始消费
     /// </summary>
     private readonly PriorityQueue<IMessage, long> _retryChannel;
 
-    private object schedulerLock = new();
+    private readonly object schedulerLock = new();
 
     private bool isSchedulerRunning;
 
-    private readonly IMessageDispatcher _dispatcher;
-
-    public DefaultRetryStrategy(ILogger<DefaultRetryStrategy> logger, IOptions<MemoryMQOptions> options, IServiceProvider serviceProvider,
+    public DefaultRetryStrategy(ILogger<DefaultRetryStrategy> logger, IOptions<MemoryMQOptions> options,
         IPersistStorage persistStorage = null)
     {
         _logger = logger;
         _options = options;
         _persistStorage = persistStorage;
-        _retryChannel = new();
+        _retryChannel = new PriorityQueue<IMessage, long>();
     }
 
     private void RunRetryScheduler(CancellationToken cancellationToken)
@@ -48,15 +45,7 @@ public class DefaultRetryStrategy : IRetryStrategy
             {
                 while (_retryChannel.TryPeek(out _, out var ticks))
                 {
-                    if (ticks >= DateTime.Now.Ticks) continue;
-
-                    _retryChannel.TryDequeue(out var msg, out _);
-
-                    if (msg is null) continue;
-
-                    _logger.LogInformation("retry message id: {MessageId} topic: {Topic} retry count {RetryCount}", msg.GetMessageId(), msg.GetTopic(), msg.GetRetryCount());
-
-                    await MessageRetryEvent?.Invoke(msg);
+                    await DequeueAndConsume(ticks);
                 }
 
                 await Task.Delay(500, cancellationToken);
@@ -64,7 +53,27 @@ public class DefaultRetryStrategy : IRetryStrategy
         }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    public async Task ScheduleRetry(IMessage message, IMessageConsumer consumer, CancellationToken cancellationToken)
+    private async ValueTask DequeueAndConsume(long ticks)
+    {
+        try
+        {
+            if (ticks >= DateTime.Now.Ticks) return;
+
+            _retryChannel.TryDequeue(out var msg, out _);
+
+            if (msg is null) return;
+
+            _logger.LogInformation("retry message id: {MessageId} topic: {Topic} retry count {RetryCount}", msg.GetMessageId(), msg.GetTopic(), msg.GetRetryCount());
+
+            if (MessageRetryEvent != null) await MessageRetryEvent(msg);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "retry message error");
+        }
+    }
+
+    public async Task ScheduleRetryAsync(IMessage message, MessageOptions messageOptions,CancellationToken cancellationToken)
     {
         if (!isSchedulerRunning)
         {
@@ -81,7 +90,7 @@ public class DefaultRetryStrategy : IRetryStrategy
 
         message.IncreaseRetryCount();
 
-        var retryCount = consumer.GetMessageConfig().RetryCount ?? _options.Value.GlobalRetryCount;
+        var retryCount = messageOptions.RetryCount ?? _options.Value.GlobalRetryCount;
 
         // dont need retry
         if (retryCount is null or 0)
@@ -92,22 +101,10 @@ public class DefaultRetryStrategy : IRetryStrategy
             return;
         }
 
-        // retry failure
+        // retry failure message
         if (message.GetRetryCount() > retryCount)
         {
-            try
-            {
-                await consumer.FailureRetryAsync(message, cancellationToken);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "consumer process failure message error");
-            }
-            finally
-            {
-                if (_options.Value.EnablePersistent)
-                    await _persistStorage!.RemoveAsync(message);
-            }
+            if (MessageRetryFailureEvent != null) await MessageRetryFailureEvent(message);
         }
         // retry again
         else
@@ -142,10 +139,10 @@ public class DefaultRetryStrategy : IRetryStrategy
 
                 break;
             default:
-                throw new ArgumentOutOfRangeException();
+                throw new ArgumentOutOfRangeException(_options.Value.RetryMode.ToString());
         }
 
-        _logger.LogInformation("message {MessageId} next retry interval is {DelayTotalSeconds} seconds, it will trigger at {Add}", 
+        _logger.LogInformation("message {MessageId} next retry interval is {DelayTotalSeconds} seconds, it will trigger at {Add}",
             message.GetMessageId(), delay.TotalSeconds, DateTime.Now.Add(delay));
 
         _retryChannel.Enqueue(message, DateTime.Now.Add(delay).Ticks);

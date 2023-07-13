@@ -1,4 +1,5 @@
-﻿using MemoryMQ.Consumer;
+﻿using MemoryMQ.Configuration;
+using MemoryMQ.Consumer;
 using MemoryMQ.Messages;
 
 namespace MemoryMQ.RetryStrategy;
@@ -6,17 +7,21 @@ namespace MemoryMQ.RetryStrategy;
 public interface IRetryStrategy
 {
     /// <summary>
-    /// 计划重试
+    /// schedule message retry
     /// </summary>
     /// <param name="message"></param>
-    /// <param name="consumer"></param>
+    /// <param name="messageOptions">message option for this topic</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    Task ScheduleRetry(IMessage message, IMessageConsumer consumer,
-        CancellationToken cancellationToken);
-    
+    Task ScheduleRetryAsync(IMessage message, MessageOptions messageOptions, CancellationToken cancellationToken);
+
     /// <summary>
-    /// 消息重试触发事件
+    /// message retry event
     /// </summary>
-    Func<IMessage,Task> MessageRetryEvent { get; set; }
+    Func<IMessage, Task> MessageRetryEvent { get; set; }
+
+    /// <summary>
+    /// message retry exceeding the retry count event
+    /// </summary>
+    Func<IMessage, Task> MessageRetryFailureEvent { get; set; }
 }
