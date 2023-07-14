@@ -8,7 +8,8 @@ A memory-based(`System.Threading.Channels`) message queue library , primarily de
 
 1. Retry on failure (fixed interval, incremental interval, exponential interval)
 2. Message persistence
-3. Control over the concurrency of each consumer
+3. Custom the concurrency, persistence, retry count, etc. of each consumer
+4. Message compression
 
 # Usage
 
