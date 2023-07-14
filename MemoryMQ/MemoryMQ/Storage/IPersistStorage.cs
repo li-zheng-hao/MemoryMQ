@@ -31,5 +31,5 @@ public interface IPersistStorage
     /// 存储
     /// </summary>
     /// <param name="message"></param>
-    Task<bool> SaveAsync(ICollection<IMessage> message);
+    Task<bool> AddAsync(ICollection<IMessage> message);
 }

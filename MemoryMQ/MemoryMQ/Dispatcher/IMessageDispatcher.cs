@@ -5,23 +5,30 @@ namespace MemoryMQ.Dispatcher;
 public interface IMessageDispatcher
 {
     /// <summary>
-    /// 启动调度
+    /// start dispatch service
     /// </summary>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     Task StartDispatchAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// 停止调度
+    /// stop dispatch service
     /// </summary>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     Task StopDispatchAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// 添加消息
+    /// add one message
     /// </summary>
     /// <param name="message"></param>
     /// <returns></returns>
     ValueTask<bool> EnqueueAsync(IMessage message);
+    
+    /// <summary>
+    /// add multiple messages
+    /// </summary>
+    /// <param name="messages"></param>
+    /// <returns></returns>
+    ValueTask<bool> EnqueueAsync(IEnumerable<IMessage> messages);
 }

@@ -189,7 +189,7 @@ public class SqliteStorageTest : IDisposable
             new Message("topic", "hello"),
         };
 
-        await persistStorage.SaveAsync(msgs);
+        await persistStorage.AddAsync(msgs);
 
         Assert.Equal(msgs.Count, CountMessage(connection));
     }

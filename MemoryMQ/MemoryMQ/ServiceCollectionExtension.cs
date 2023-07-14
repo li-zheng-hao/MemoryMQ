@@ -26,9 +26,7 @@ public static class ServiceCollectionExtension
 
         serviceCollection.AddHostedService<DispatcherService>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp => 
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+     
 
         serviceCollection.AddSingleton<IMessagePublisher, MessagePublisher>();
 
@@ -39,7 +37,12 @@ public static class ServiceCollectionExtension
         config(memoryMqOptions);
 
         if (memoryMqOptions.EnablePersistent)
+        {
+            serviceCollection.AddSingleton<SQLiteConnection>(sp => 
+                new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
+                    .OpenAndReturn());
             serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
+        }
 
         return serviceCollection;
     }

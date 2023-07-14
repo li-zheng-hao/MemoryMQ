@@ -22,6 +22,26 @@ public class DispatcherTest : IDisposable
         _dbpath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _dbName);
     }
 
+    [Fact]
+    public async Task TestFullQueue_Passed()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        services.AddMemoryMQ(config =>
+        {
+            config.ConsumerAssemblies = new Assembly[]
+            {
+                typeof(TestConsumer).Assembly
+            };
+
+            config.RetryInterval = TimeSpan.FromMilliseconds(100);
+            config.EnablePersistent = false;
+            config.DbConnectionString = _dbConnectionString;
+        });
+
+        await using var sp = services.BuildServiceProvider();
+    }
     
     [Fact]
     public async Task TestEnqueueArgsCheck_Passed()

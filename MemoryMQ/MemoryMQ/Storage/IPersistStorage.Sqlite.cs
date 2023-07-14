@@ -11,14 +11,15 @@ public class SqlitePersistStorage : IPersistStorage
 {
     private readonly SQLiteConnection _connection;
 
-    public SqlitePersistStorage(IOptions<MemoryMQOptions> options,SQLiteConnection connection)
+    public SqlitePersistStorage(IOptions<MemoryMQOptions> options, SQLiteConnection connection)
     {
         _connection = connection;
     }
 
-    public  async Task CreateTableAsync()
+    public async Task CreateTableAsync()
     {
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
+
         cmd.CommandText = @"
 create table if not exists memorymq_message
 (
@@ -42,7 +43,8 @@ create unique index if not exists memorymq_message_message_id_index
     {
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = $@"update memorymq_message set retry={message.GetRetryCount()} where message_id='{message.GetMessageId()}';";
-        return (await cmd.ExecuteNonQueryAsync())>0;
+
+        return (await cmd.ExecuteNonQueryAsync()) > 0;
     }
 
     public async Task<bool> AddAsync(IMessage message)
@@ -50,6 +52,7 @@ create unique index if not exists memorymq_message_message_id_index
         var data = JsonSerializer.Serialize(message);
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = $@"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{message.GetMessageId()}',{message.GetCreateTime()},{message.GetRetryCount()});";
+
         return (await cmd.ExecuteNonQueryAsync()) > 0;
     }
 
@@ -57,7 +60,8 @@ create unique index if not exists memorymq_message_message_id_index
     {
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = $@"delete from memorymq_message where message_id='{message.GetMessageId()}';";
-        return (await cmd.ExecuteNonQueryAsync())>0;
+
+        return (await cmd.ExecuteNonQueryAsync()) > 0;
     }
 
     public async Task<IEnumerable<IMessage>> RestoreAsync()
@@ -66,6 +70,7 @@ create unique index if not exists memorymq_message_message_id_index
         cmd.CommandText = @"select message from memorymq_message order by create_time asc;";
         await using var reader = cmd.ExecuteReader();
         var messages = new List<IMessage>();
+
         while (await reader.ReadAsync())
         {
             var data = reader.GetString(0);
@@ -76,18 +81,25 @@ create unique index if not exists memorymq_message_message_id_index
         return messages;
     }
 
-    public async Task<bool> SaveAsync(ICollection<IMessage> message)
+    public async Task<bool> AddAsync(ICollection<IMessage> message)
     {
-       
-        StringBuilder sb=new StringBuilder();
+        StringBuilder sb = new StringBuilder();
+
         foreach (var m in message)
         {
             var data = JsonSerializer.Serialize(m);
             sb.Append($"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{m.GetMessageId()}',{m.GetCreateTime()},{m.GetRetryCount()});");
         }
+
+        var sqlComm = new SQLiteCommand("begin", _connection);
+        sqlComm.ExecuteNonQuery();
+
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
         cmd.CommandText = sb.ToString();
-        return (await cmd.ExecuteNonQueryAsync())==message.Count;
-    }
+        var insertedNum = await cmd.ExecuteNonQueryAsync();
+        sqlComm = new SQLiteCommand("end", _connection);
+        sqlComm.ExecuteNonQuery();
 
+        return insertedNum == message.Count;
+    }
 }

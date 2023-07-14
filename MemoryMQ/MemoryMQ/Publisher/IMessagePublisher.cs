@@ -7,4 +7,6 @@ public interface IMessagePublisher
     ValueTask<bool> PublishAsync(IMessage message);
 
     ValueTask<bool> PublishAsync(string topic, string body);
+    
+    ValueTask<bool> PublishAsync(ICollection<IMessage> messages);
 }

@@ -53,15 +53,6 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
     public async ValueTask<bool> EnqueueAsync(IMessage message)
     {
-        if (string.IsNullOrEmpty(message.GetTopic()))
-            throw new ArgumentException("message topic should not be empty!");
-
-        if (string.IsNullOrEmpty(message.GetMessageId()))
-            throw new ArgumentException("message id should not be empty!");
-
-        if (string.IsNullOrEmpty(message.GetCreateTime()))
-            throw new ArgumentException("message create time should not be empty!");
-
         _channels.TryGetValue(message.GetTopic()!, out var channel);
 
         if (channel is null)
@@ -84,7 +75,47 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         }
 
         return channel.Writer.TryWrite(message);
+    }
 
+    public async ValueTask<bool> EnqueueAsync(IEnumerable<IMessage> messages)
+    {
+        string topic = messages.First().GetTopic();
+        
+        _channels.TryGetValue(topic, out var channel);
+
+        if (channel is null)
+        {
+            _logger.LogWarning("message topic {Topic} not found matched channel, please check your consumer registration!", topic);
+
+            return false;
+        }
+
+        var persistMessages = messages.Where(it => it.GetRetryCount() is null or 0).ToList();
+
+        if (_options.Value.EnablePersistent && persistMessages.Any())
+        {
+            var opResult = await _persistStorage!.AddAsync(persistMessages);
+
+            if (!opResult)
+            {
+                _logger.LogWarning("messages enqueue to persistent storage failed!");
+
+                return false;
+            }
+        }
+
+        foreach (var message in messages)
+        {
+            bool opResult;
+            int retryCount = 0;
+            do
+            {
+                // retry 3 times
+                opResult = channel.Writer.TryWrite(message);
+            } while (!opResult && retryCount++ <= 3);
+        }
+
+        return true;
     }
 
     public async Task StartDispatchAsync(CancellationToken cancellationToken)
