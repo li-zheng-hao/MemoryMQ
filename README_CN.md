@@ -92,3 +92,27 @@ await publisher.SendAsync(message);
 // or this way
 await publisher.SendAsync("topic-a","hello world");
 ```
+
+
+# 性能测试
+
+数据大小：每条消息53.2KB,消息数量：100条
+
+```markdown
+// * Summary *
+
+BenchmarkDotNet v0.13.6, Windows 10 (10.0.19045.3208/22H2/2022Update)
+AMD Ryzen 7 PRO 4750U with Radeon Graphics, 1 CPU, 16 logical and 8 physical cores
+.NET SDK 6.0.406
+[Host]   : .NET 6.0.15 (6.0.1523.11507), X64 RyuJIT AVX2
+.NET 6.0 : .NET 6.0.15 (6.0.1523.11507), X64 RyuJIT AVX2
+
+Job=.NET 6.0  Runtime=.NET 6.0
+
+|                               Method |       Mean |     Error |     StdDev |     Median |
+|------------------------------------- |-----------:|----------:|-----------:|-----------:|
+|                   PublishWithPersist | 104.733 ms | 3.2088 ms |  8.8917 ms | 106.186 ms |
+|                      PublishInMemory |   3.145 ms | 0.3250 ms |  0.9584 ms |   3.937 ms |
+|                  PublishWithCompress |  36.384 ms | 3.9532 ms | 11.6560 ms |  30.872 ms |
+|        PublishWithPersistAndCompress |  57.261 ms | 3.6179 ms | 10.4962 ms |  56.048 ms |
+```

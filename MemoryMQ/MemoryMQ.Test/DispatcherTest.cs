@@ -37,7 +37,7 @@ public class DispatcherTest : IDisposable
             };
 
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
             // config.DbConnectionString = _dbConnectionString;
             config.GlobalBoundedChannelFullMode = BoundedChannelFullMode.Wait;
             config.GlobalMaxChannelSize = 1;
@@ -72,7 +72,7 @@ public class DispatcherTest : IDisposable
             };
 
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = true;
+            config.EnablePersistence = true;
             config.DbConnectionString = _dbConnectionString;
         });
 
@@ -98,7 +98,7 @@ public class DispatcherTest : IDisposable
             };
 
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = true;
+            config.EnablePersistence = true;
             config.DbConnectionString = _dbConnectionString;
         });
 
@@ -124,7 +124,7 @@ public class DispatcherTest : IDisposable
             };
 
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = true;
+            config.EnablePersistence = true;
             config.DbConnectionString = _dbConnectionString;
         });
 
@@ -151,7 +151,7 @@ public class DispatcherTest : IDisposable
             };
 
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = true;
+            config.EnablePersistence = true;
             config.GlobalRetryCount = 1;
             config.DbConnectionString = _dbConnectionString;
         });

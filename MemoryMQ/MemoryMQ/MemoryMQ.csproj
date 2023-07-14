@@ -9,7 +9,7 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <Version>1.0.1</Version>
+        <Version>1.1.0</Version>
         <Title>MemoryMQ</Title>
         <Authors>lizhenghao</Authors>
         <PackageProjectUrl>https://github.com/li-zheng-hao/MemoryMQ</PackageProjectUrl>
@@ -19,6 +19,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="EasyCompressor.LZ4" Version="1.4.0" />
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="7.0.0" />
       <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.1" />
       <PackageReference Include="Microsoft.Extensions.Options" Version="7.0.1" />

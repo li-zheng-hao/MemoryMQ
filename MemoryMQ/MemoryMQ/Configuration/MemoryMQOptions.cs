@@ -22,6 +22,11 @@ public class MemoryMQOptions
     /// behavior when channel is full, default is wait
     /// </summary>
     public BoundedChannelFullMode GlobalBoundedChannelFullMode { get; set; } = BoundedChannelFullMode.Wait;
+    
+    /// <summary>
+    /// enable message compression, default is true
+    /// </summary>
+    public bool EnableCompression { get; set; } = true;
 
     /// <summary>
     /// interval to poll message from queue
@@ -31,7 +36,7 @@ public class MemoryMQOptions
     /// <summary>
     /// enable persistent (only support sqlite), default is true
     /// </summary>
-    public bool EnablePersistent { get; set; } = true;
+    public bool EnablePersistence { get; set; } = true;
 
     /// <summary>
     /// database connection string (now only support sqlite), default is 'data source=memorymq.db'

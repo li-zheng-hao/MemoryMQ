@@ -13,7 +13,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddMemoryMQ(it =>
 {
-    it.EnablePersistent = true;
+    it.EnablePersistence = true;
     it.RetryMode = RetryMode.Incremental;
     it.RetryInterval = TimeSpan.FromSeconds(5);
 });

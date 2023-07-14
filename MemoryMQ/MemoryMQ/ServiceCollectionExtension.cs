@@ -36,12 +36,17 @@ public static class ServiceCollectionExtension
 
         config(memoryMqOptions);
 
-        if (memoryMqOptions.EnablePersistent)
+        if (memoryMqOptions.EnablePersistence)
         {
             serviceCollection.AddSingleton<SQLiteConnection>(sp => 
                 new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
                     .OpenAndReturn());
             serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
+        }
+
+        if (memoryMqOptions.EnableCompression)
+        {
+            serviceCollection.AddLZ4Compressor();
         }
 
         return serviceCollection;

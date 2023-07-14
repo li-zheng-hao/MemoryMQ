@@ -1,5 +1,11 @@
-﻿using MemoryMQ.Dispatcher;
+﻿using EasyCompressor;
+using MemoryMQ.Compress;
+using MemoryMQ.Configuration;
+using MemoryMQ.Consumer;
+using MemoryMQ.Dispatcher;
+using MemoryMQ.Internal;
 using MemoryMQ.Messages;
+using Microsoft.Extensions.Options;
 
 namespace MemoryMQ.Publisher;
 
@@ -22,12 +28,13 @@ public class MessagePublisher : IMessagePublisher
     public ValueTask<bool> PublishAsync(string topic, string body)
     {
         var message = new Message(topic, body);
-        
+
         return PublishAsync(message);
     }
 
     public ValueTask<bool> PublishAsync(ICollection<IMessage> messages)
     {
+
         foreach (var message in messages)
         {
             ValidateMessage(message);

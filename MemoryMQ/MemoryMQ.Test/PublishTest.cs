@@ -26,7 +26,7 @@ public class PublishTest
         services.Configure<MemoryMQOptions>(config =>
         {
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
         });
 
         services.AddSingleton<MessagePublisher>();
@@ -51,7 +51,7 @@ public class PublishTest
 
         services.AddMemoryMQ(it =>
         {
-            it.EnablePersistent = false;
+            it.EnablePersistence = false;
 
             it.ConsumerAssemblies = new Assembly[]
             {

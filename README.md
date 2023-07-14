@@ -93,3 +93,25 @@ await publisher.SendAsync(message);
 await publisher.SendAsync("topic-a","hello world");
 ```
 
+# Benchmark
+
+Data Size: 53.2KB per message, message count: 100
+
+```markdown
+// * Summary *
+
+BenchmarkDotNet v0.13.6, Windows 10 (10.0.19045.3208/22H2/2022Update)
+AMD Ryzen 7 PRO 4750U with Radeon Graphics, 1 CPU, 16 logical and 8 physical cores
+.NET SDK 6.0.406
+[Host]   : .NET 6.0.15 (6.0.1523.11507), X64 RyuJIT AVX2
+.NET 6.0 : .NET 6.0.15 (6.0.1523.11507), X64 RyuJIT AVX2
+
+Job=.NET 6.0  Runtime=.NET 6.0
+
+|                               Method |       Mean |     Error |     StdDev |     Median |
+|------------------------------------- |-----------:|----------:|-----------:|-----------:|
+|                   PublishWithPersist | 104.733 ms | 3.2088 ms |  8.8917 ms | 106.186 ms |
+|                PublishWithoutPersist |   3.145 ms | 0.3250 ms |  0.9584 ms |   3.937 ms |
+| PublishWithoutPersistAndWithCompress |  36.384 ms | 3.9532 ms | 11.6560 ms |  30.872 ms |
+|    PublishWithPersistAndWithCompress |  57.261 ms | 3.6179 ms | 10.4962 ms |  56.048 ms |
+```

@@ -3,16 +3,20 @@ using System.Text;
 using System.Text.Json;
 using MemoryMQ.Configuration;
 using MemoryMQ.Messages;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace MemoryMQ.Storage;
 
 public class SqlitePersistStorage : IPersistStorage
 {
+    private readonly ILogger<SqlitePersistStorage> _logger;
+
     private readonly SQLiteConnection _connection;
 
-    public SqlitePersistStorage(IOptions<MemoryMQOptions> options, SQLiteConnection connection)
+    public SqlitePersistStorage(ILogger<SqlitePersistStorage> logger, IOptions<MemoryMQOptions> options, SQLiteConnection connection)
     {
+        _logger = logger;
         _connection = connection;
         SpeedupSqlite();
     }
@@ -22,7 +26,7 @@ public class SqlitePersistStorage : IPersistStorage
         using var cmd = new SQLiteCommand(_connection);
         cmd.CommandText = "PRAGMA journal_mode = WAL;";
         cmd.ExecuteNonQuery();
-        
+
         cmd.CommandText = "PRAGMA synchronous = NORMAL;";
         cmd.ExecuteNonQuery();
     }
@@ -96,20 +100,38 @@ create unique index if not exists memorymq_message_message_id_index
     {
         StringBuilder sb = new StringBuilder();
 
+        sb.Append("insert into memorymq_message (message,message_id,create_time,retry) values ");
+
         foreach (var m in message)
         {
             var data = JsonSerializer.Serialize(m);
-            sb.Append($"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{m.GetMessageId()}',{m.GetCreateTime()},{m.GetRetryCount()});");
+
+            sb.Append($" ('{data}','{m.GetMessageId()}',{m.GetCreateTime()},{m.GetRetryCount()}),");
         }
 
-        await using var sqlComm = new SQLiteCommand("begin", _connection);
-        sqlComm.ExecuteNonQuery();
+        sb.Remove(sb.Length - 1, 1);
 
-        sqlComm.CommandText = sb.ToString();
-        var insertedNum = await sqlComm.ExecuteNonQueryAsync();
-        sqlComm.CommandText = "end";
-        sqlComm.ExecuteNonQuery();
+        await using var transaction = _connection.BeginTransaction();
 
-        return insertedNum == message.Count;
+        try
+        {
+            await using var sqlComm = new SQLiteCommand(_connection);
+
+            sqlComm.CommandText = sb.ToString();
+
+            await sqlComm.ExecuteNonQueryAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "batch insert message error");
+
+            await transaction.RollbackAsync();
+
+            return false;
+        }
     }
 }

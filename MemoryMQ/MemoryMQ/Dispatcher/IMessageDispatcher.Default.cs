@@ -1,7 +1,10 @@
 ﻿using System.Collections.Concurrent;
 using System.Threading.Channels;
+using EasyCompressor;
+using MemoryMQ.Compress;
 using MemoryMQ.Configuration;
 using MemoryMQ.Consumer;
+using MemoryMQ.Internal;
 using MemoryMQ.Messages;
 using MemoryMQ.RetryStrategy;
 using MemoryMQ.Storage;
@@ -25,6 +28,8 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
     private readonly IRetryStrategy _retryStrategy;
 
+    private readonly ICompressor _compressor;
+
     private readonly ConcurrentDictionary<string, Channel<IMessage>> _channels = new();
 
     private CancellationToken _cancelToken;
@@ -33,6 +38,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         IServiceProvider serviceProvider,
         IConsumerFactory consumerFactory,
         IRetryStrategy retryStrategy,
+        ICompressor compressor=null,
         IPersistStorage persistStorage = null)
     {
         _logger = logger;
@@ -41,6 +47,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         _serviceProvider = serviceProvider;
         _consumerFactory = consumerFactory;
         _retryStrategy = retryStrategy;
+        _compressor = compressor;
 
         retryStrategy.MessageRetryEvent = RetryMessageAsync;
         retryStrategy.MessageRetryFailureEvent = RetryMessageFailureAsync;
@@ -51,7 +58,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         return Task.CompletedTask;
     }
 
-    public async ValueTask<bool> EnqueueAsync(IMessage message)
+    public async ValueTask<bool> EnqueueAsync(IMessage message,bool isNewMessage = true)
     {
         _channels.TryGetValue(message.GetTopic()!, out var channel);
 
@@ -62,7 +69,12 @@ public class DefaultMessageDispatcher : IMessageDispatcher
             return false;
         }
 
-        if (_options.Value.EnablePersistent && message.GetRetryCount() is null or 0)
+        if (isNewMessage&&_consumerFactory.ConsumerOptions[message.GetTopic()].GetEnableCompression(_options.Value))
+        {
+            message.Body = _compressor.Compress(message.Body);
+        }
+        
+        if (_consumerFactory.ConsumerOptions[message.GetTopic()].GetEnablePersistence(_options.Value) && message.GetRetryCount() is null or 0)
         {
             var opResult = await _persistStorage!.AddAsync(message);
 
@@ -80,22 +92,27 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         return true;
     }
 
-    public async ValueTask<bool> EnqueueAsync(IEnumerable<IMessage> messages)
+    public async ValueTask<bool> EnqueueAsync(ICollection<IMessage> messages,bool isNewMessage = true)
     {
-        string topic = messages.First().GetTopic();
-        
-        _channels.TryGetValue(topic, out var channel);
 
-        if (channel is null)
+        foreach (var message in messages)
         {
-            _logger.LogWarning("message topic {Topic} not found matched channel, please check your consumer registration!", topic);
+            if (!_channels.ContainsKey(message.GetTopic()))
+            {
+                _logger.LogWarning("message topic {Topic} not found matched channel, please check your consumer registration!", message.GetTopic());
 
-            return false;
+                return false;
+            }
+
+            if (isNewMessage&&_consumerFactory.ConsumerOptions[message.GetTopic()].GetEnableCompression(_options.Value))
+            {
+                message.Body = _compressor.Compress(message.Body);
+            }
         }
 
         var persistMessages = messages.Where(it => it.GetRetryCount() is null or 0).ToList();
 
-        if (_options.Value.EnablePersistent && persistMessages.Any())
+        if (_options.Value.EnablePersistence && persistMessages.Any())
         {
             var opResult = await _persistStorage!.AddAsync(persistMessages);
 
@@ -109,13 +126,7 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
         foreach (var message in messages)
         {
-            bool opResult;
-            int retryCount = 0;
-            do
-            {
-                // retry 3 times
-                opResult = channel.Writer.TryWrite(message);
-            } while (!opResult && retryCount++ <= 3);
+            await _channels[message.GetTopic()].Writer.WriteAsync(message,_cancelToken);
         }
 
         return true;
@@ -125,12 +136,12 @@ public class DefaultMessageDispatcher : IMessageDispatcher
     {
         _cancelToken = cancellationToken;
 
-        if (_options.Value.EnablePersistent && _persistStorage is not null)
+        if (_options.Value.EnablePersistence && _persistStorage is not null)
             await _persistStorage.CreateTableAsync();
 
         InitConsumers();
 
-        if (_options.Value.EnablePersistent)
+        if (_options.Value.EnablePersistence)
             await RestoreMessagesAsync(cancellationToken);
 
         RunDispatch(cancellationToken);
@@ -188,6 +199,9 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
         try
         {
+            if (_options.Value.EnableCompression)
+                message.Body = _compressor.Decompress(message.Body);
+                    
             await consumer.ReceivedAsync(message, cancellationToken);
         }
         catch (Exception e)
@@ -201,10 +215,15 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         {
             if (isConsumeSuccess)
             {
-                if (_options.Value.EnablePersistent) await _persistStorage!.RemoveAsync(message);
+                if (_options.Value.EnablePersistence) await _persistStorage!.RemoveAsync(message);
             }
             else
+            {
+                message.IncreaseRetryCount();
+
                 await _retryStrategy.ScheduleRetryAsync(message, consumer.GetMessageConfig(), cancellationToken);
+            }
+
         }
         catch (Exception e)
         {
@@ -235,27 +254,27 @@ public class DefaultMessageDispatcher : IMessageDispatcher
     {
         var consumerOptions = _consumerFactory.ConsumerOptions;
 
-        foreach (var topic in consumerOptions.Select(it => it.Key))
+        foreach (var messageOption in consumerOptions.Select(it => it.Value))
         {
-            if (_channels.ContainsKey(topic))
+            if (_channels.ContainsKey(messageOption.Topic))
                 continue;
 
-            var channel = Channel.CreateBounded<IMessage>(new BoundedChannelOptions(_options.Value.GlobalMaxChannelSize)
+            var channel = Channel.CreateBounded<IMessage>(new BoundedChannelOptions(messageOption.GetMaxChannelSize(_options.Value))
             {
                 SingleReader = true,
                 SingleWriter = true,
-                FullMode = _options.Value.GlobalBoundedChannelFullMode
+                FullMode = messageOption.GetBoundedChannelFullMode(_options.Value)
             });
 
-            _logger.LogDebug("Add channel for topic {ConfigTopic}", topic);
+            _logger.LogDebug("Add channel for topic {ConfigTopic}", messageOption.Topic);
 
-            _channels.TryAdd(topic, channel);
+            _channels.TryAdd(messageOption.Topic, channel);
         }
     }
 
     async internal Task RetryMessageAsync(IMessage msg)
     {
-        var retry = await EnqueueAsync(msg);
+        var retry = await EnqueueAsync(msg,false);
 
         if (!retry)
         {
@@ -278,6 +297,9 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
         try
         {
+            if (_options.Value.EnableCompression)
+                message.Body = _compressor.Decompress(message.Body);
+            
             await consumer.FailureRetryAsync(message, _cancelToken);
         }
         catch (Exception e)

@@ -1,220 +1,49 @@
-﻿using System.Diagnostics;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Runtime.Serialization;
-using System.Text;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Jobs;
-using BenchmarkDotNet.Reports;
-using BenchmarkDotNet.Running;
-using MemoryMQ;
-using MemoryMQ.Benchmark;
-using MemoryMQ.Dispatcher;
+using System.Threading.Channels;
+using EasyCompressor;
+using MemoryMQ.Compress;
 using MemoryMQ.Messages;
-using MemoryMQ.Publisher;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
+using Xunit.Abstractions;
+using Xunit.Sdk;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
-Summary summary = BenchmarkRunner.Run<PublishTest>();
+namespace MemoryMQ.Test;
 
- Console.WriteLine(summary);
-//
-//
-// var p=new PublishTest();
-// p.Setup();
-// Stopwatch sw = new();
-// sw.Start();
-// p.PublishWithPersist();
-// Console.WriteLine(sw.ElapsedMilliseconds);
-
-[SimpleJob(RuntimeMoniker.Net60)]
-[RPlotExporter]
-public class PublishTest
+public class CompressTest
 {
-    private ServiceProvider _sp;
+    private readonly ITestOutputHelper _testOutputHelper;
 
-    private List<IMessage> _msgs;
-
-    private IMessagePublisher publisher1;
-
-    private IMessagePublisher publisher2;
-
-    private string _body;
-
-    private IMessagePublisher publisher3;
-
-    private IMessagePublisher publisher4;
-
-    [GlobalSetup]
-    public void Setup()
+    public CompressTest(ITestOutputHelper testOutputHelper)
     {
-        Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "*.db").ToList().ForEach(File.Delete);
-        
-        #region Metho1
+        _testOutputHelper = testOutputHelper;
+    }
 
-        IServiceCollection serviceCollection = new ServiceCollection();
+    [Fact]
+    public void TestCompress()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
 
-        serviceCollection.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-
-            config.EnablePersistence = true;
-
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-
-            config.EnableCompression = false;
-        });
-
-        serviceCollection.AddLogging();
-        serviceCollection.AddScoped<TestConsumer>();
-        _sp = serviceCollection.BuildServiceProvider();
-
-        var dispatcher = _sp.GetService<IMessageDispatcher>();
-        dispatcher.StartDispatchAsync(default).Wait();
-        publisher1 = _sp.GetService<IMessagePublisher>();
-
-        #endregion
-        
-        #region Method2
-        
-        IServiceCollection serviceCollection2 = new ServiceCollection();
-        
-        serviceCollection2.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-        
-            config.EnablePersistence = false;
-            config.DbConnectionString = "DataSource=memorymq2.db";
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            
-            config.EnableCompression = false;
-        
-        });
-        
-        serviceCollection2.AddLogging();
-        serviceCollection2.AddScoped<TestConsumer>();
-        var _sp2 = serviceCollection2.BuildServiceProvider();
-        
-        var dispatcher2 = _sp2.GetService<IMessageDispatcher>();
-        dispatcher2.StartDispatchAsync(default).Wait();
-        publisher2 = _sp2.GetService<IMessagePublisher>();
-        
-        #endregion
-        
-        #region Method3
-        
-        IServiceCollection serviceCollection3 = new ServiceCollection();
-        
-        serviceCollection3.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-        
-            config.EnablePersistence = false;
-            config.DbConnectionString = "DataSource=memorymq3.db";
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnableCompression=true;
-        });
-        
-        serviceCollection3.AddLogging();
-        serviceCollection3.AddScoped<TestConsumer>();
-        var _sp3 = serviceCollection3.BuildServiceProvider();
-        
-        var dispatcher3 = _sp3.GetService<IMessageDispatcher>();
-        dispatcher3.StartDispatchAsync(default).Wait();
-        publisher3 = _sp3.GetService<IMessagePublisher>();
-        
-        #endregion
-        
-        #region Method4
-        
-        IServiceCollection serviceCollection4 = new ServiceCollection();
-        
-        serviceCollection4.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-        
-            config.EnablePersistence = true;
-            config.DbConnectionString = "DataSource=memorymq4.db";
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnableCompression = true;
-        });
-        
-        serviceCollection4.AddLogging();
-        serviceCollection4.AddScoped<TestConsumer>();
-        var _sp4 = serviceCollection4.BuildServiceProvider();
-        
-        var dispatcher4 = _sp4.GetService<IMessageDispatcher>();
-        dispatcher4.StartDispatchAsync(default).Wait();
-        publisher4 = _sp4.GetService<IMessagePublisher>();
-        
-        #endregion
-
-    
+        services.AddLZ4Compressor();
+        using var sp = services.BuildServiceProvider();
+        var compressor = sp.GetService<ICompressor>();
 
         var json = File.ReadAllText("compress_data.json");
         var spotify = JsonConvert.DeserializeObject<SpotifyAlbumArray>(json);
-        // _body = "aaaaaaaaaaaaaaaaaaaaaaaaa";//JsonConvert.SerializeObject(spotify);
-        _body = JsonConvert.SerializeObject(spotify);
-    }
+        var body=JsonConvert.SerializeObject(spotify);
+        var msg = new Message("topic", body);
+        var compressedBody = compressor.Compress(msg.Body);
+        _testOutputHelper.WriteLine($"compress before: {msg.Body.Length} after: {compressedBody.Length}");
 
+    
 
-    [Benchmark]
-    public async Task PublishWithPersist()
-    {
-        _msgs = new List<IMessage>();
-        for (int i = 0; i < 100; i++)
-        {
-            _msgs.Add(new Message("topic",_body));
-        }
-        await publisher1.PublishAsync(_msgs);
-    }
-    
-    [Benchmark]
-    public async Task PublishInMemory()
-    {
-        _msgs = new List<IMessage>();
-        for (int i = 0; i < 100; i++)
-        {
-            _msgs.Add(new Message("topic",_body));
-        }
-        await publisher2.PublishAsync(_msgs);
-    }
-    
-    [Benchmark]
-    public async Task PublishWithCompress()
-    {
-        _msgs = new List<IMessage>();
-        for (int i = 0; i < 100; i++)
-        {
-            _msgs.Add(new Message("topic",_body));
-        }
-        await publisher3.PublishAsync(_msgs);
-    }
-    
-    [Benchmark]
-    public async Task PublishWithPersistAndCompress()
-    {
-        _msgs = new List<IMessage>();
-        for (int i = 0; i < 100; i++)
-        {
-            _msgs.Add(new Message("topic",_body));
-        }
-        await publisher4.PublishAsync(_msgs);
+        var decompressBody = compressor.Decompress(compressedBody);
+        Assert.Equal(decompressBody, msg.Body);
     }
 }
-
-
 [Serializable]
 [DataContract]
 internal class SpotifyAlbumArray

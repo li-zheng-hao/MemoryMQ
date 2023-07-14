@@ -22,7 +22,7 @@ public class RetryStrategyTest
         serviceCollection.Configure<MemoryMQOptions>(config =>
         {
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
             config.GlobalRetryCount =0;
         });
 
@@ -66,7 +66,7 @@ public class RetryStrategyTest
         serviceCollection.Configure<MemoryMQOptions>(config =>
         {
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
             config.GlobalRetryCount = 1;
         });
 
@@ -77,6 +77,7 @@ public class RetryStrategyTest
 
         IMessage msg = new Message("topic", "hello");
         
+        msg.IncreaseRetryCount();
         msg.IncreaseRetryCount();
         
         strategy.MessageRetryEvent = async message =>
@@ -108,7 +109,7 @@ public class RetryStrategyTest
         serviceCollection.Configure<MemoryMQOptions>(config =>
         {
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
         });
 
         serviceCollection.AddLogging();
@@ -140,7 +141,7 @@ public class RetryStrategyTest
         serviceCollection.Configure<MemoryMQOptions>(config =>
         {
             config.RetryInterval = TimeSpan.FromSeconds(1);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
             config.RetryMode = RetryMode.Incremental;
             config.GlobalRetryCount = 10;
         });
@@ -171,7 +172,7 @@ public class RetryStrategyTest
         {
             await Task.Delay(500, cancellationTokenSource.Token);
         }
-        Assert.True(sw.ElapsedMilliseconds > 3000);
+        Assert.True(sw.ElapsedMilliseconds > 2000);
 
         Assert.True(retryTrigger);
     }
@@ -185,7 +186,7 @@ public class RetryStrategyTest
         serviceCollection.Configure<MemoryMQOptions>(config =>
         {
             config.RetryInterval = TimeSpan.FromSeconds(1);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
             config.RetryMode = RetryMode.Fixed;
             config.GlobalRetryCount = 10;
         });
@@ -231,7 +232,7 @@ public class RetryStrategyTest
         serviceCollection.Configure<MemoryMQOptions>(config =>
         {
             config.RetryInterval = TimeSpan.FromSeconds(1);
-            config.EnablePersistent = false;
+            config.EnablePersistence = false;
             config.RetryMode = RetryMode.Exponential;
             config.GlobalRetryCount = 10;
         });
@@ -242,6 +243,7 @@ public class RetryStrategyTest
         var strategy = sp.GetService<DefaultRetryStrategy>();
 
         IMessage msg = new Message("topic", "hello");
+        msg.IncreaseRetryCount();
         msg.IncreaseRetryCount();
         Stopwatch sw = new Stopwatch();
         sw.Start();

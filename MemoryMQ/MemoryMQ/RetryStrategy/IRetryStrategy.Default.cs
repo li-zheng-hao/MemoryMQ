@@ -1,4 +1,5 @@
 ﻿using MemoryMQ.Configuration;
+using MemoryMQ.Internal;
 using MemoryMQ.Messages;
 using MemoryMQ.Storage;
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,7 @@ public class DefaultRetryStrategy : IRetryStrategy
     public Func<IMessage, Task> MessageRetryFailureEvent { get; set; }
 
     /// <summary>
-    /// 重试队列 如果重启则该队列会清空 所有消息会重新开始消费
+    /// Retry queue, If restarted, the queue will be cleared and all messages will be consumed again after restored from database
     /// </summary>
     private readonly PriorityQueue<IMessage, long> _retryChannel;
 
@@ -87,16 +88,14 @@ public class DefaultRetryStrategy : IRetryStrategy
                 }
             }
         }
-
-        message.IncreaseRetryCount();
-
-        var retryCount = messageOptions.RetryCount ?? _options.Value.GlobalRetryCount;
+        
+        var retryCount = messageOptions.GetRetryCount(_options.Value);
 
         // dont need retry
-        if (retryCount is null or 0)
+        if (retryCount == 0)
         {
-            if (_options.Value.EnablePersistent)
-                await _persistStorage.RemoveAsync(message);
+            if (messageOptions.GetEnablePersistence(_options.Value)) 
+                await _persistStorage!.RemoveAsync(message);
 
             return;
         }
@@ -111,10 +110,7 @@ public class DefaultRetryStrategy : IRetryStrategy
         {
             EnqueueRetryQueue(message);
 
-            if (_options.Value.EnablePersistent)
-            {
-                await _persistStorage!.UpdateRetryAsync(message);
-            }
+            if (messageOptions.GetEnablePersistence(_options.Value)) await _persistStorage!.UpdateRetryAsync(message);
         }
     }
 
