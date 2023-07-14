@@ -1,5 +1,6 @@
 ﻿using System.Data.SQLite;
 using System.Reflection;
+using System.Threading.Channels;
 using MemoryMQ.Configuration;
 using MemoryMQ.Dispatcher;
 using MemoryMQ.Messages;
@@ -21,9 +22,9 @@ public class DispatcherTest : IDisposable
         _dbConnectionString = $"Data Source={_dbName};Pooling=false";
         _dbpath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _dbName);
     }
-
+   
     [Fact]
-    public async Task TestFullQueue_Passed()
+    public async Task TestFullQueueWithWait()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -37,12 +38,26 @@ public class DispatcherTest : IDisposable
 
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
             config.EnablePersistent = false;
-            config.DbConnectionString = _dbConnectionString;
+            // config.DbConnectionString = _dbConnectionString;
+            config.GlobalBoundedChannelFullMode = BoundedChannelFullMode.Wait;
+            config.GlobalMaxChannelSize = 1;
         });
 
+        services.AddScoped<TestSlowConsumer>();
         await using var sp = services.BuildServiceProvider();
+        var messageDispatcher = sp.GetService<IMessageDispatcher>();
+        await messageDispatcher.StartDispatchAsync(default);
+        
+        var message1 = new Message("topic", "body");
+        var opResult = await messageDispatcher.EnqueueAsync(message1);
+        Assert.True(opResult);
+        
+        
+        var message2 = new Message("topic", "body");
+        opResult = await messageDispatcher.EnqueueAsync(message2);
+        Assert.True(opResult);
     }
-    
+
     [Fact]
     public async Task TestEnqueueNoConsumer_Passed()
     {
@@ -64,9 +79,11 @@ public class DispatcherTest : IDisposable
         await using var sp = services.BuildServiceProvider();
         var dispatcher = sp.GetService<IMessageDispatcher>() as DefaultMessageDispatcher;
         dispatcher.StartDispatchAsync(default);
+        
         var opResult = await dispatcher.EnqueueAsync(new Message("topic", "hello"));
         Assert.False(opResult);
     }
+
     [Fact]
     public async Task TestEnqueue_Passed()
     {

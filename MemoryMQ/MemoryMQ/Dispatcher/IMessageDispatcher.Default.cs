@@ -73,8 +73,11 @@ public class DefaultMessageDispatcher : IMessageDispatcher
                 return false;
             }
         }
+        
+        // use WaitToWriteAsync internally to guarantee message will be write to channel
+        await channel.Writer.WriteAsync(message,_cancelToken);
 
-        return channel.Writer.TryWrite(message);
+        return true;
     }
 
     public async ValueTask<bool> EnqueueAsync(IEnumerable<IMessage> messages)

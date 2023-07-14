@@ -16,19 +16,6 @@ public class PublishTest
 {
     private readonly ServiceProvider _provider;
 
-    [Fact]
-    public void Serialize()
-    {
-        var str = JsonConvert.SerializeObject(new
-        {
-            a = 1,
-            b = 2,
-            c = new object[]
-            {
-                "a", false
-            }
-        });
-    }
 
     [Fact]
     public async Task PublishNoConsumer()
@@ -46,7 +33,7 @@ public class PublishTest
         services.AddSingleton<IMessageDispatcher, DefaultMessageDispatcher>();
         services.AddSingleton<IRetryStrategy, DefaultRetryStrategy>();
         services.AddSingleton<IConsumerFactory, DefaultConsumerFactory>();
-        var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         var publisher = provider.GetService<MessagePublisher>();
 
@@ -74,7 +61,7 @@ public class PublishTest
 
         services.AddScoped<TestConsumer>();
 
-        var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var dispatcherService = provider.GetService<IHostedService>();
         await dispatcherService.StartAsync(default);
 

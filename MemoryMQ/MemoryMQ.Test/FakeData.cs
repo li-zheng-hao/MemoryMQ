@@ -38,3 +38,30 @@ public class TestConsumer : IMessageConsumer
     }
 
 }
+
+public class TestSlowConsumer : IMessageConsumer
+{
+    public static int Received { get; set; } = 0;
+
+    public static int ReceivedFailure { get; set; } = 0;
+    public MessageOptions GetMessageConfig()
+    {
+        return new MessageOptions()
+        {
+            Topic = "topic",
+        };
+    }
+
+    public async Task ReceivedAsync(IMessage message, CancellationToken cancellationToken)
+    {
+        Received++;
+        await Task.Delay(60_000, cancellationToken);
+    }
+
+    public async Task FailureRetryAsync(IMessage message, CancellationToken cancellationToken)
+    {
+        ReceivedFailure++;
+        await Task.Delay(60_000, cancellationToken);
+    }
+
+}

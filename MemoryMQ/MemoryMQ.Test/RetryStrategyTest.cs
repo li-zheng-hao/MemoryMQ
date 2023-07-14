@@ -113,7 +113,7 @@ public class RetryStrategyTest
 
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        var sp = serviceCollection.BuildServiceProvider();
+        await using var sp = serviceCollection.BuildServiceProvider();
         var strategy = sp.GetService<DefaultRetryStrategy>();
 
         IMessage msg = new Message("topic", "hello");
@@ -147,7 +147,7 @@ public class RetryStrategyTest
 
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        var sp = serviceCollection.BuildServiceProvider();
+        await using var sp = serviceCollection.BuildServiceProvider();
         var strategy = sp.GetService<DefaultRetryStrategy>();
 
         IMessage msg = new Message("topic", "hello");
@@ -192,7 +192,7 @@ public class RetryStrategyTest
 
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        var sp = serviceCollection.BuildServiceProvider();
+        await using var sp = serviceCollection.BuildServiceProvider();
         var strategy = sp.GetService<DefaultRetryStrategy>();
 
         IMessage msg = new Message("topic", "hello");
@@ -238,7 +238,7 @@ public class RetryStrategyTest
 
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        var sp = serviceCollection.BuildServiceProvider();
+        await using var sp = serviceCollection.BuildServiceProvider();
         var strategy = sp.GetService<DefaultRetryStrategy>();
 
         IMessage msg = new Message("topic", "hello");
