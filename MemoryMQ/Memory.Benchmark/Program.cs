@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Reports;
@@ -31,10 +32,13 @@ public class PublishTest
 
     private IMessagePublisher _memoryPublisher;
 
+    private string _body;
+
     [GlobalSetup]
     public void Setup()
     {
         IServiceCollection serviceCollection = new ServiceCollection();
+
         serviceCollection.AddMemoryMQ(config =>
         {
             config.ConsumerAssemblies = new Assembly[]
@@ -46,36 +50,46 @@ public class PublishTest
 
             config.RetryInterval = TimeSpan.FromMilliseconds(100);
         });
+
         serviceCollection.AddLogging();
         serviceCollection.AddScoped<TestConsumer>();
-        _sp=serviceCollection.BuildServiceProvider();
+        _sp = serviceCollection.BuildServiceProvider();
 
         var dispatcher = _sp.GetService<IMessageDispatcher>();
-         dispatcher.StartDispatchAsync(default).Wait();
-         _persisitPublisher = _sp.GetService<IMessagePublisher>();
-         
-         
-         IServiceCollection serviceCollection2 = new ServiceCollection();
-         serviceCollection2.AddMemoryMQ(config =>
-         {
-             config.ConsumerAssemblies = new Assembly[]
-             {
-                 typeof(TestConsumer).Assembly
-             };
+        dispatcher.StartDispatchAsync(default).Wait();
+        _persisitPublisher = _sp.GetService<IMessagePublisher>();
 
-             config.EnablePersistent = false;
-             config.DbConnectionString = "DataSource=memorymq2.db";
-             config.RetryInterval = TimeSpan.FromMilliseconds(100);
-         });
-         serviceCollection2.AddLogging();
-         serviceCollection2.AddScoped<TestConsumer>();
-         _sp=serviceCollection2.BuildServiceProvider();
 
-         var dispatcher2 = _sp.GetService<IMessageDispatcher>();
-         dispatcher2.StartDispatchAsync(default).Wait();
-         _memoryPublisher = _sp.GetService<IMessagePublisher>();
+        IServiceCollection serviceCollection2 = new ServiceCollection();
 
-        
+        serviceCollection2.AddMemoryMQ(config =>
+        {
+            config.ConsumerAssemblies = new Assembly[]
+            {
+                typeof(TestConsumer).Assembly
+            };
+
+            config.EnablePersistent = false;
+            config.DbConnectionString = "DataSource=memorymq2.db";
+            config.RetryInterval = TimeSpan.FromMilliseconds(100);
+        });
+
+        serviceCollection2.AddLogging();
+        serviceCollection2.AddScoped<TestConsumer>();
+        _sp = serviceCollection2.BuildServiceProvider();
+
+        var dispatcher2 = _sp.GetService<IMessageDispatcher>();
+        dispatcher2.StartDispatchAsync(default).Wait();
+        _memoryPublisher = _sp.GetService<IMessagePublisher>();
+        StringBuilder sb = new();
+
+        for (int i = 0; i < 10; i++)
+        {
+            sb.Append("aaaaaaaaaa");
+        }
+
+        _body = sb.ToString();
+        Console.WriteLine($"{Encoding.UTF8.GetBytes(_body).Length} bytes");
     }
 
 
@@ -85,7 +99,7 @@ public class PublishTest
         _msgs = new List<IMessage>();
         for (int i = 0; i < 100; i++)
         {
-            _msgs.Add(new Message("topic","hello"));
+            _msgs.Add(new Message("topic",_body));
         }
         await _persisitPublisher.PublishAsync(_msgs);
     }
@@ -96,7 +110,7 @@ public class PublishTest
         _msgs = new List<IMessage>();
         for (int i = 0; i < 1000; i++)
         {
-            _msgs.Add(new Message("topic","hello"));
+            _msgs.Add(new Message("topic",_body));
         }
         await _memoryPublisher.PublishAsync(_msgs);
     }

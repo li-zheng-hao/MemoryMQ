@@ -14,6 +14,17 @@ public class SqlitePersistStorage : IPersistStorage
     public SqlitePersistStorage(IOptions<MemoryMQOptions> options, SQLiteConnection connection)
     {
         _connection = connection;
+        SpeedupSqlite();
+    }
+
+    private void SpeedupSqlite()
+    {
+        using var cmd = new SQLiteCommand(_connection);
+        cmd.CommandText = "PRAGMA journal_mode = WAL;";
+        cmd.ExecuteNonQuery();
+        
+        cmd.CommandText = "PRAGMA synchronous = NORMAL;";
+        cmd.ExecuteNonQuery();
     }
 
     public async Task CreateTableAsync()
@@ -91,13 +102,12 @@ create unique index if not exists memorymq_message_message_id_index
             sb.Append($"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{m.GetMessageId()}',{m.GetCreateTime()},{m.GetRetryCount()});");
         }
 
-        var sqlComm = new SQLiteCommand("begin", _connection);
+        await using var sqlComm = new SQLiteCommand("begin", _connection);
         sqlComm.ExecuteNonQuery();
 
-        await using SQLiteCommand cmd = new SQLiteCommand(_connection);
-        cmd.CommandText = sb.ToString();
-        var insertedNum = await cmd.ExecuteNonQueryAsync();
-        sqlComm = new SQLiteCommand("end", _connection);
+        sqlComm.CommandText = sb.ToString();
+        var insertedNum = await sqlComm.ExecuteNonQueryAsync();
+        sqlComm.CommandText = "end";
         sqlComm.ExecuteNonQuery();
 
         return insertedNum == message.Count;

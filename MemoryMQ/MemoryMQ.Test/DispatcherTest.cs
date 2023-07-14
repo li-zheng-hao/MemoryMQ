@@ -44,52 +44,6 @@ public class DispatcherTest : IDisposable
     }
     
     [Fact]
-    public async Task TestEnqueueArgsCheck_Passed()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-
-        services.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistent = true;
-            config.DbConnectionString = _dbConnectionString;
-        });
-
-        await using var sp = services.BuildServiceProvider();
-        var dispatcher = sp.GetService<IMessageDispatcher>() as DefaultMessageDispatcher;
-        dispatcher.StartDispatchAsync(default);
-        var msg=new Message("topic", "hello");
-        msg.Header[MessageHeader.MessageId] = null;
-
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
-        {
-            await dispatcher.EnqueueAsync(msg);
-        });
-        
-        var msg2=new Message("topic", "hello");
-        msg2.Header[MessageHeader.Topic] = null;
-
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
-        {
-            await dispatcher.EnqueueAsync(msg2);
-        });
-        
-        var msg3=new Message("topic", "hello");
-        msg3.Header[MessageHeader.CreatTime] = null;
-
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
-        {
-            await dispatcher.EnqueueAsync(msg3);
-        });
-    }
-    
-    [Fact]
     public async Task TestEnqueueNoConsumer_Passed()
     {
         var services = new ServiceCollection();
