@@ -1,5 +1,4 @@
-# <center> ![](icon.png)
-# <center>  MemoryMQ 
+# <img src="icon.png" style="zoom: 33%;" />MemoryMQ
 
 [中文](README_CN.md)|[English](README.md)
 
