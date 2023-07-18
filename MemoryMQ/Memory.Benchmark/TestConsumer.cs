@@ -6,9 +6,9 @@ namespace MemoryMQ.Benchmark;
 
 public class TestConsumer : IMessageConsumer
 {
-    public MessageOptions GetMessageConfig()
+    public ConsumerOptions GetConsumerConfig()
     {
-        return new MessageOptions()
+        return new ConsumerOptions()
         {
             Topic = "topic"
         };

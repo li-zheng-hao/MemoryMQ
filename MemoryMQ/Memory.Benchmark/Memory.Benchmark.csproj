@@ -11,10 +11,12 @@
     <ItemGroup>
       <PackageReference Include="BenchmarkDotNet" Version="0.13.6" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
-      <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\MemoryMQ.Storage.LiteDB\MemoryMQ.Storage.LiteDB.csproj" />
+      <ProjectReference Include="..\MemoryMQ.Storage.SQLite\MemoryMQ.Storage.SQLite.csproj" />
       <ProjectReference Include="..\MemoryMQ\MemoryMQ.csproj" />
     </ItemGroup>
 

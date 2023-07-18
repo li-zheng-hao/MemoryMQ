@@ -3,9 +3,9 @@
 namespace MemoryMQ.Configuration;
 
 /// <summary>
-/// consume message options
+/// consumer options
 /// </summary>
-public class MessageOptions
+public class ConsumerOptions
 {
     /// <summary>
     /// message topic, required and unique

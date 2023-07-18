@@ -10,10 +10,10 @@ public interface IRetryStrategy
     /// schedule message retry
     /// </summary>
     /// <param name="message"></param>
-    /// <param name="messageOptions">message option for this topic</param>
+    /// <param name="consumerOptions">message option for this topic</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    Task ScheduleRetryAsync(IMessage message, MessageOptions messageOptions, CancellationToken cancellationToken);
+    Task ScheduleRetryAsync(IMessage message, ConsumerOptions consumerOptions, CancellationToken cancellationToken);
 
     /// <summary>
     /// message retry event

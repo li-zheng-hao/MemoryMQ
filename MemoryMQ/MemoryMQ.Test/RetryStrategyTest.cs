@@ -46,7 +46,7 @@ public class RetryStrategyTest
             await Task.CompletedTask;
         };
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetConsumerConfig(), default);
 
         await Task.Delay(1000);
         
@@ -93,7 +93,7 @@ public class RetryStrategyTest
             await Task.CompletedTask;
         };
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetConsumerConfig(), default);
 
         await AssertEx.WaitUntil(() => retryFailureTrigger, 1000,6000);
         Assert.False(retryTrigger);
@@ -126,7 +126,7 @@ public class RetryStrategyTest
             await Task.CompletedTask;
         };
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetConsumerConfig(), default);
 
         await AssertEx.WaitUntil(() => retryTrigger, 1000,6000);
     }
@@ -164,7 +164,7 @@ public class RetryStrategyTest
             return Task.CompletedTask;
         };
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetConsumerConfig(), default);
 
         var cancellationTokenSource = new CancellationTokenSource(10000);
 
@@ -210,7 +210,7 @@ public class RetryStrategyTest
             await Task.CompletedTask;
         };
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetConsumerConfig(), default);
 
         var cancellationTokenSource = new CancellationTokenSource(10000);
 
@@ -255,7 +255,7 @@ public class RetryStrategyTest
             return Task.CompletedTask;
         };
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetConsumerConfig(), default);
 
         var cancellationTokenSource = new CancellationTokenSource(10000);
 

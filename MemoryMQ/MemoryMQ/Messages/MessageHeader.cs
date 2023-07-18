@@ -6,7 +6,7 @@
 public static class MessageHeader
 {
     /// <summary>
-    /// message id
+    /// message id, default is Guid.NewGuid().ToString()
     /// </summary>
     public const string MessageId = "message_id";
 

@@ -6,13 +6,13 @@ namespace MemoryMQ.Consumer;
 public interface IMessageConsumer
 {
     /// <summary>
-    /// 获取消费者配置
+    /// get consumer option
     /// </summary>
     /// <returns></returns>
-    MessageOptions GetMessageConfig(); 
+    ConsumerOptions GetConsumerConfig(); 
 
     /// <summary>
-    /// 处理消息
+    /// received message
     /// </summary>
     /// <param name="message"></param>
     /// <param name="cancellationToken"></param>
@@ -20,7 +20,7 @@ public interface IMessageConsumer
     Task ReceivedAsync(IMessage message, CancellationToken cancellationToken);
 
     /// <summary>
-    /// 超过重试次数
+    /// retry message failure
     /// </summary>
     /// <param name="message"></param>
     /// <param name="cancellationToken"></param>

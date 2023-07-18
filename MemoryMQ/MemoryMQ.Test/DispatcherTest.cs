@@ -1,7 +1,5 @@
-﻿using System.Data.SQLite;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Threading.Channels;
-using MemoryMQ.Configuration;
 using MemoryMQ.Dispatcher;
 using MemoryMQ.Messages;
 using Microsoft.Extensions.DependencyInjection;

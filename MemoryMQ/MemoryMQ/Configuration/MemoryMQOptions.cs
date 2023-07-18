@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Threading.Channels;
+using MemoryMQ.ServiceExtensions;
 
 namespace MemoryMQ.Configuration;
 
@@ -8,6 +9,12 @@ namespace MemoryMQ.Configuration;
 /// </summary>
 public class MemoryMQOptions
 {
+    public MemoryMQOptions()
+    {
+        Extensions = new List<IExtension>();
+    }
+    public ICollection<IExtension> Extensions { get; set; }
+
     /// <summary>
     /// consumer assemblies
     /// </summary>

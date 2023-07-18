@@ -1,14 +1,11 @@
-﻿using System.Data.SQLite;
-using MemoryMQ.Configuration;
+﻿using MemoryMQ.Configuration;
 using MemoryMQ.Consumer;
 using MemoryMQ.Dispatcher;
 using MemoryMQ.Publisher;
 using MemoryMQ.RetryStrategy;
-using MemoryMQ.Storage;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace MemoryMQ;
+namespace Microsoft.Extensions.DependencyInjection;
 
 public static class ServiceCollectionExtension
 {
@@ -26,8 +23,6 @@ public static class ServiceCollectionExtension
 
         serviceCollection.AddHostedService<DispatcherService>();
 
-     
-
         serviceCollection.AddSingleton<IMessagePublisher, MessagePublisher>();
 
         serviceCollection.AddSingleton<IRetryStrategy, DefaultRetryStrategy>();
@@ -38,15 +33,17 @@ public static class ServiceCollectionExtension
 
         if (memoryMqOptions.EnablePersistence)
         {
-            serviceCollection.AddSingleton<SQLiteConnection>(sp => 
-                new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                    .OpenAndReturn());
-            serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
+         
         }
 
         if (memoryMqOptions.EnableCompression)
         {
             serviceCollection.AddLZ4Compressor();
+        }
+        
+        foreach (var extension in memoryMqOptions.Extensions)
+        {
+            extension.AddServices(serviceCollection);
         }
 
         return serviceCollection;

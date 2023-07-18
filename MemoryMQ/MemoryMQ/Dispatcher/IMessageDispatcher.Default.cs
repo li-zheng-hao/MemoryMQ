@@ -159,18 +159,18 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         }
     }
 
-    async internal Task PollingMessage(MessageOptions messageOptions,
+    async internal Task PollingMessage(ConsumerOptions consumerOptions,
         CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                _channels.TryGetValue(messageOptions.Topic, out var channel);
+                _channels.TryGetValue(consumerOptions.Topic, out var channel);
 
                 while (channel!.Reader.CanPeek && channel.Reader.TryRead(out var message))
                 {
-                    await ConsumeMessage(message, messageOptions, cancellationToken);
+                    await ConsumeMessage(message, consumerOptions, cancellationToken);
                 }
 
                 await Task.Delay(_options.Value.PollingInterval, cancellationToken);
@@ -182,15 +182,15 @@ public class DefaultMessageDispatcher : IMessageDispatcher
         }
     }
 
-    async internal Task ConsumeMessage(IMessage message, MessageOptions messageOptions, CancellationToken cancellationToken)
+    async internal Task ConsumeMessage(IMessage message, ConsumerOptions consumerOptions, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
 
-        var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider, messageOptions.Topic);
+        var consumer = _consumerFactory.CreateConsumer(scope.ServiceProvider, consumerOptions.Topic);
 
         if (consumer is null)
         {
-            _logger.LogWarning("{MessageOptionsTopic} consumer is null", messageOptions.Topic);
+            _logger.LogWarning("{MessageOptionsTopic} consumer is null", consumerOptions.Topic);
 
             return;
         }
@@ -221,13 +221,13 @@ public class DefaultMessageDispatcher : IMessageDispatcher
             {
                 message.IncreaseRetryCount();
 
-                await _retryStrategy.ScheduleRetryAsync(message, consumer.GetMessageConfig(), cancellationToken);
+                await _retryStrategy.ScheduleRetryAsync(message, consumer.GetConsumerConfig(), cancellationToken);
             }
 
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "retry message error {MessageOptionsTopic}", messageOptions.Topic);
+            _logger.LogError(e, "retry message error {MessageOptionsTopic}", consumerOptions.Topic);
         }
     }
 

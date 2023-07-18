@@ -17,9 +17,9 @@ public class TestConsumer : IMessageConsumer
     public static int Received { get; set; } = 0;
 
     public static int ReceivedFailure { get; set; } = 0;
-    public MessageOptions GetMessageConfig()
+    public ConsumerOptions GetConsumerConfig()
     {
-        return new MessageOptions()
+        return new ConsumerOptions()
         {
             Topic = "topic",
         };
@@ -44,9 +44,9 @@ public class TestSlowConsumer : IMessageConsumer
     public static int Received { get; set; } = 0;
 
     public static int ReceivedFailure { get; set; } = 0;
-    public MessageOptions GetMessageConfig()
+    public ConsumerOptions GetConsumerConfig()
     {
-        return new MessageOptions()
+        return new ConsumerOptions()
         {
             Topic = "topic",
         };

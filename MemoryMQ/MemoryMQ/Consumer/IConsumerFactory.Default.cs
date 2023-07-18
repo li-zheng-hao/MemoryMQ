@@ -13,7 +13,7 @@ public class DefaultConsumerFactory : IConsumerFactory
 
     public Dictionary<string, Type> Consumers { get; init; }
 
-    public Dictionary<string, MessageOptions> ConsumerOptions { get; init; }
+    public Dictionary<string, ConsumerOptions> ConsumerOptions { get; init; }
 
     public DefaultConsumerFactory(ILogger<DefaultConsumerFactory> logger,IServiceProvider serviceProvider, IOptions<MemoryMQOptions> options)
     {
@@ -37,8 +37,8 @@ public class DefaultConsumerFactory : IConsumerFactory
                 if (scope.ServiceProvider.GetService(consumerType) is not IMessageConsumer consumer) 
                     continue;
              
-                Consumers.Add(consumer.GetMessageConfig().Topic, consumer.GetType());
-                ConsumerOptions.Add(consumer.GetMessageConfig().Topic, consumer.GetMessageConfig());
+                Consumers.Add(consumer.GetConsumerConfig().Topic, consumer.GetType());
+                ConsumerOptions.Add(consumer.GetConsumerConfig().Topic, consumer.GetConsumerConfig());
             }
         }
         

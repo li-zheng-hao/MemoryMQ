@@ -14,9 +14,9 @@ public class ConsumerA : IMessageConsumer,IDisposable
         _logger.LogInformation("ConsumerA init at {Now}", DateTime.Now);
     }
 
-    public MessageOptions GetMessageConfig()
+    public ConsumerOptions GetConsumerConfig()
     {
-        return new MessageOptions()
+        return new ConsumerOptions()
         {
             Topic = "topic-a",
             ParallelNum = 5,

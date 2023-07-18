@@ -24,6 +24,8 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\MemoryMQ.Storage.LiteDB\MemoryMQ.Storage.LiteDB.csproj" />
+      <ProjectReference Include="..\MemoryMQ.Storage.SQLite\MemoryMQ.Storage.SQLite.csproj" />
       <ProjectReference Include="..\MemoryMQ\MemoryMQ.csproj" />
     </ItemGroup>
 

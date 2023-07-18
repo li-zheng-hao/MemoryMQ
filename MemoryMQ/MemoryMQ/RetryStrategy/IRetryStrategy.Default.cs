@@ -74,7 +74,7 @@ public class DefaultRetryStrategy : IRetryStrategy
         }
     }
 
-    public async Task ScheduleRetryAsync(IMessage message, MessageOptions messageOptions,CancellationToken cancellationToken)
+    public async Task ScheduleRetryAsync(IMessage message, ConsumerOptions consumerOptions,CancellationToken cancellationToken)
     {
         if (!isSchedulerRunning)
         {
@@ -89,12 +89,12 @@ public class DefaultRetryStrategy : IRetryStrategy
             }
         }
         
-        var retryCount = messageOptions.GetRetryCount(_options.Value);
+        var retryCount = consumerOptions.GetRetryCount(_options.Value);
 
         // dont need retry
         if (retryCount == 0)
         {
-            if (messageOptions.GetEnablePersistence(_options.Value)) 
+            if (consumerOptions.GetEnablePersistence(_options.Value)) 
                 await _persistStorage!.RemoveAsync(message);
 
             return;
@@ -110,7 +110,7 @@ public class DefaultRetryStrategy : IRetryStrategy
         {
             EnqueueRetryQueue(message);
 
-            if (messageOptions.GetEnablePersistence(_options.Value)) await _persistStorage!.UpdateRetryAsync(message);
+            if (consumerOptions.GetEnablePersistence(_options.Value)) await _persistStorage!.UpdateRetryAsync(message);
         }
     }
 

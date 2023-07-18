@@ -14,7 +14,7 @@ using MemoryMQ.Publisher;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 
-Summary summary = BenchmarkRunner.Run<PublishTest>();
+Summary summary = BenchmarkRunner.Run<StorageBenchmark>();
 
  Console.WriteLine(summary);
 //

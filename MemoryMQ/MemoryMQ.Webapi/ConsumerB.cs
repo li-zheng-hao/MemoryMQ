@@ -15,9 +15,9 @@ public class ConsumerB : IMessageConsumer
         logger.LogInformation("ConsumerB init");
     }
 
-    public MessageOptions GetMessageConfig()
+    public ConsumerOptions GetConsumerConfig()
     {
-        return new MessageOptions()
+        return new ConsumerOptions()
         {
             Topic = "topic-b",
             ParallelNum = 1,
