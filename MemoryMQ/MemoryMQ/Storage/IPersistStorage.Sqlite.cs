@@ -14,7 +14,8 @@ public class SqlitePersistStorage : IPersistStorage
 
     private readonly SQLiteConnection _connection;
 
-    public SqlitePersistStorage(ILogger<SqlitePersistStorage> logger, IOptions<MemoryMQOptions> options, SQLiteConnection connection)
+    public SqlitePersistStorage(ILogger<SqlitePersistStorage> logger, IOptions<MemoryMQOptions> options,
+        SQLiteConnection connection)
     {
         _logger = logger;
         _connection = connection;
@@ -57,7 +58,8 @@ create unique index if not exists memorymq_message_message_id_index
     public async Task<bool> UpdateRetryAsync(IMessage message)
     {
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
-        cmd.CommandText = $@"update memorymq_message set retry={message.GetRetryCount()} where message_id='{message.GetMessageId()}';";
+        cmd.CommandText =
+            $@"update memorymq_message set retry={message.GetRetryCount()} where message_id='{message.GetMessageId()}';";
 
         return (await cmd.ExecuteNonQueryAsync()) > 0;
     }
@@ -66,7 +68,8 @@ create unique index if not exists memorymq_message_message_id_index
     {
         var data = JsonSerializer.Serialize(message);
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
-        cmd.CommandText = $@"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{message.GetMessageId()}',{message.GetCreateTime()},{message.GetRetryCount()});";
+        cmd.CommandText =
+            $@"insert into memorymq_message (message,message_id,create_time,retry) values ('{data}','{message.GetMessageId()}',{message.GetCreateTime()},{message.GetRetryCount()});";
 
         return (await cmd.ExecuteNonQueryAsync()) > 0;
     }
@@ -82,15 +85,21 @@ create unique index if not exists memorymq_message_message_id_index
     public async Task<IEnumerable<IMessage>> RestoreAsync()
     {
         await using SQLiteCommand cmd = new SQLiteCommand(_connection);
-        cmd.CommandText = @"select message from memorymq_message order by create_time asc;";
+        cmd.CommandText = @"select message,retry from memorymq_message order by create_time asc;";
         await using var reader = cmd.ExecuteReader();
         var messages = new List<IMessage>();
 
         while (await reader.ReadAsync())
         {
             var data = reader.GetString(0);
+            var retryCount = reader.GetInt64(1);
+          
             var message = JsonSerializer.Deserialize<Message>(data);
-            if (message != null) messages.Add(message);
+            
+            if (message == null) continue;
+            
+            message.SetRetryCount(retryCount);
+            messages.Add(message);
         }
 
         return messages;

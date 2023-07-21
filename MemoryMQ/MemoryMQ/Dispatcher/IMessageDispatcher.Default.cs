@@ -199,9 +199,6 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
         try
         {
-            if (_options.Value.EnableCompression)
-                message.Body = _compressor.Decompress(message.Body);
-                    
             await consumer.ReceivedAsync(message, cancellationToken);
         }
         catch (Exception e)
@@ -233,21 +230,32 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
     async internal Task RestoreMessagesAsync(CancellationToken cancellationToken)
     {
-        var messages = await _persistStorage!.RestoreAsync();
-
-        foreach (var message in messages)
+        try
         {
-            if (!_channels.ContainsKey(message.GetTopic()!))
+            var messages = await _persistStorage!.RestoreAsync();
+
+            foreach (var message in messages)
             {
-                _logger.LogWarning("message {MessageId} topic {Topic} not found matched channel", message.GetMessageId(), message.GetTopic());
+                if (!_channels.ContainsKey(message.GetTopic()!))
+                {
+                    _logger.LogWarning("message {MessageId} topic {Topic} not found matched channel", message.GetMessageId(), message.GetTopic());
 
-                continue;
+                    continue;
+                }
+            
+                if (_options.Value.EnableCompression)
+                    message.Body = _compressor.Decompress(message.Body);
+            
+                var channel = _channels[message.GetTopic()!];
+
+                await channel.Writer.WriteAsync(message, cancellationToken);
             }
-
-            var channel = _channels[message.GetTopic()!];
-
-            await channel.Writer.WriteAsync(message, cancellationToken);
         }
+        catch (Exception e)
+        {
+            _logger.LogError(e,"restore messages error");
+        }
+        
     }
 
     private void InitConsumers()
@@ -297,9 +305,6 @@ public class DefaultMessageDispatcher : IMessageDispatcher
 
         try
         {
-            if (_options.Value.EnableCompression)
-                message.Body = _compressor.Decompress(message.Body);
-            
             await consumer.FailureRetryAsync(message, _cancelToken);
         }
         catch (Exception e)
