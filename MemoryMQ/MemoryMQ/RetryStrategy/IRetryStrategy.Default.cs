@@ -103,7 +103,10 @@ public class DefaultRetryStrategy : IRetryStrategy
         // retry failure message
         if (message.GetRetryCount() > retryCount)
         {
-            if (MessageRetryFailureEvent != null) await MessageRetryFailureEvent(message);
+            if (MessageRetryFailureEvent != null) 
+                await MessageRetryFailureEvent(message);
+            if (messageOptions.GetEnablePersistence(_options.Value)) 
+                await _persistStorage!.RemoveAsync(message);
         }
         // retry again
         else
