@@ -18,9 +18,45 @@ public class SqliteStorageTest : IDisposable
 
     public SqliteStorageTest()
     {
-        _dbName = $"{Guid.NewGuid().ToString()}.db";
+        _dbName             = $"{Guid.NewGuid().ToString()}.db";
         _dbConnectionString = $"Data Source={_dbName};Pooling=false";
-        _dbpath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _dbName);
+        _dbpath             = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _dbName);
+    }
+
+    [Fact]
+    public async Task AddToDeadLetterQueueAsync_Passed()
+    {
+        IServiceCollection serviceCollection = new ServiceCollection();
+        serviceCollection.AddLogging();
+        serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
+
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
+
+        serviceCollection.Configure<MemoryMQOptions>(it =>
+                                                     {
+                                                         it.DbConnectionString    = _dbConnectionString;
+                                                         it.EnableDeadLetterQueue = true;
+                                                     });
+
+        await using var serviceProvider = serviceCollection.BuildServiceProvider();
+        var             persistStorage  = serviceProvider.GetService<IPersistStorage>();
+
+        var connection = serviceProvider.GetService<SQLiteConnection>();
+
+        await persistStorage.CreateTableAsync();
+
+        var msg = new Message("topic", "hello");
+
+        var removed = await persistStorage.AddToDeadLetterQueueAsync(msg);
+
+        Assert.Equal(1, CountMessageForDeadletterQueue(connection));
+        Assert.True(removed);
     }
 
     [Fact]
@@ -30,22 +66,26 @@ public class SqliteStorageTest : IDisposable
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp =>
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
 
         serviceCollection.Configure<MemoryMQOptions>(it => { it.DbConnectionString = _dbConnectionString; });
         await using var serviceProvider = serviceCollection.BuildServiceProvider();
-        var persistStorage = serviceProvider.GetService<IPersistStorage>();
+        var             persistStorage  = serviceProvider.GetService<IPersistStorage>();
 
         var connection = serviceProvider.GetService<SQLiteConnection>();
 
         Assert.Throws<SQLiteException>(() =>
-        {
-            using var cmd = new SQLiteCommand(connection);
-            cmd.CommandText = "select count(*) from memorymq_message;";
-            cmd.ExecuteScalar();
-        });
+                                       {
+                                           using var cmd = new SQLiteCommand(connection);
+                                           cmd.CommandText = "select count(*) from memorymq_message;";
+                                           cmd.ExecuteScalar();
+                                       });
 
         await persistStorage.CreateTableAsync();
         await using var cmd = new SQLiteCommand(connection);
@@ -61,19 +101,22 @@ public class SqliteStorageTest : IDisposable
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp =>
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
 
         serviceCollection.Configure<MemoryMQOptions>(it => { it.DbConnectionString = _dbConnectionString; });
         await using var serviceProvider = serviceCollection.BuildServiceProvider();
-        var persistStorage = serviceProvider.GetService<IPersistStorage>();
-        var connection = serviceProvider.GetService<SQLiteConnection>();
+        var             persistStorage  = serviceProvider.GetService<IPersistStorage>();
+        var             connection      = serviceProvider.GetService<SQLiteConnection>();
         await persistStorage.CreateTableAsync();
         var inserted = await persistStorage.AddAsync(new Message("topic", "hello"));
 
-
-        Assert.Equal(1L, CountMessage(connection));
+        Assert.Equal(1L,   CountMessage(connection));
         Assert.Equal(true, inserted);
     }
 
@@ -84,13 +127,17 @@ public class SqliteStorageTest : IDisposable
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp =>
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
 
         serviceCollection.Configure<MemoryMQOptions>(it => { it.DbConnectionString = _dbConnectionString; });
         await using var serviceProvider = serviceCollection.BuildServiceProvider();
-        var persistStorage = serviceProvider.GetService<IPersistStorage>();
+        var             persistStorage  = serviceProvider.GetService<IPersistStorage>();
 
         var connection = serviceProvider.GetService<SQLiteConnection>();
 
@@ -100,7 +147,7 @@ public class SqliteStorageTest : IDisposable
 
         var removed = await persistStorage.RemoveAsync(msg);
 
-        Assert.Equal(0, CountMessage(connection));
+        Assert.Equal(0,    CountMessage(connection));
         Assert.Equal(true, removed);
     }
 
@@ -111,13 +158,17 @@ public class SqliteStorageTest : IDisposable
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp =>
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
 
         serviceCollection.Configure<MemoryMQOptions>(it => { it.DbConnectionString = _dbConnectionString; });
         await using var serviceProvider = serviceCollection.BuildServiceProvider();
-        var persistStorage = serviceProvider.GetService<IPersistStorage>();
+        var             persistStorage  = serviceProvider.GetService<IPersistStorage>();
 
         var connection = serviceProvider.GetService<SQLiteConnection>();
 
@@ -141,13 +192,17 @@ public class SqliteStorageTest : IDisposable
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp =>
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
 
         serviceCollection.Configure<MemoryMQOptions>(it => { it.DbConnectionString = _dbConnectionString; });
         await using var serviceProvider = serviceCollection.BuildServiceProvider();
-        var persistStorage = serviceProvider.GetService<IPersistStorage>();
+        var             persistStorage  = serviceProvider.GetService<IPersistStorage>();
 
         var connection = serviceProvider.GetService<SQLiteConnection>();
 
@@ -170,24 +225,29 @@ public class SqliteStorageTest : IDisposable
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp =>
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
 
         serviceCollection.Configure<MemoryMQOptions>(it => { it.DbConnectionString = _dbConnectionString; });
         await using var serviceProvider = serviceCollection.BuildServiceProvider();
-        var persistStorage = serviceProvider.GetService<IPersistStorage>();
+        var             persistStorage  = serviceProvider.GetService<IPersistStorage>();
 
         var connection = serviceProvider.GetService<SQLiteConnection>();
 
         await persistStorage.CreateTableAsync();
 
-        List<IMessage> msgs = new()
-        {
-            new Message("topic", "hello"),
-            new Message("topic", "hello"),
-            new Message("topic", "hello"),
-        };
+        List<IMessage> msgs =
+            new()
+            {
+                new Message("topic", "hello"),
+                new Message("topic", "hello"),
+                new Message("topic", "hello"),
+            };
 
         await persistStorage.AddAsync(msgs);
 
@@ -201,9 +261,13 @@ public class SqliteStorageTest : IDisposable
         serviceCollection.AddLogging();
         serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
 
-        serviceCollection.AddSingleton<SQLiteConnection>(sp =>
-            new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                .OpenAndReturn());
+        serviceCollection.AddSingleton<SQLiteConnection>(
+                                                         sp =>
+                                                             new SQLiteConnection(
+                                                                                  sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value
+                                                                                    .DbConnectionString
+                                                                                 ).OpenAndReturn()
+                                                        );
 
         serviceCollection.Configure<MemoryMQOptions>(it => { it.DbConnectionString = _dbConnectionString; });
         await using var serviceProvider = serviceCollection.BuildServiceProvider();
@@ -219,6 +283,16 @@ public class SqliteStorageTest : IDisposable
         using var cmd = new SQLiteCommand(connection);
 
         cmd.CommandText = "select count(*) from memorymq_message;";
+        var count = cmd.ExecuteScalar();
+
+        return int.Parse(count.ToString());
+    }
+
+    private int CountMessageForDeadletterQueue(SQLiteConnection connection)
+    {
+        using var cmd = new SQLiteCommand(connection);
+
+        cmd.CommandText = "select count(*) from memorymq_deadmessage;";
         var count = cmd.ExecuteScalar();
 
         return int.Parse(count.ToString());

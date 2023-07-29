@@ -9,13 +9,18 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <Version>1.1.4</Version>
+        <Version>1.2.0</Version>
         <Title>MemoryMQ</Title>
         <Authors>lizhenghao</Authors>
         <PackageProjectUrl>https://github.com/li-zheng-hao/MemoryMQ</PackageProjectUrl>
         <RepositoryUrl>https://github.com/li-zheng-hao/MemoryMQ</RepositoryUrl>
         <Description>a simple message queue base on in-process memory</Description>
         <PackageIcon>icon.png</PackageIcon>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <NoWarn>1701;1702;CS1591</NoWarn>
+      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
 
     <ItemGroup>

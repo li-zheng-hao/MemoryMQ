@@ -9,7 +9,7 @@ public interface IMessageConsumer
     /// 获取消费者配置
     /// </summary>
     /// <returns></returns>
-    MessageOptions GetMessageConfig(); 
+    MessageOptions GetMessageConfig();
 
     /// <summary>
     /// 处理消息

@@ -12,7 +12,7 @@ public class MemoryMQOptions
     /// consumer assemblies
     /// </summary>
     public Assembly[] ConsumerAssemblies { get; set; } = { Assembly.GetEntryAssembly()! };
-    
+
     /// <summary>
     /// global channel max size
     /// </summary>
@@ -22,7 +22,7 @@ public class MemoryMQOptions
     /// behavior when channel is full, default is wait
     /// </summary>
     public BoundedChannelFullMode GlobalBoundedChannelFullMode { get; set; } = BoundedChannelFullMode.Wait;
-    
+
     /// <summary>
     /// enable message compression, default is true
     /// </summary>
@@ -47,8 +47,8 @@ public class MemoryMQOptions
     /// <summary>
     /// global retry count, null or 0 means no retry
     /// </summary>
-    public uint? GlobalRetryCount { get; set; } = 3; 
-    
+    public uint? GlobalRetryCount { get; set; } = 3;
+
     /// <summary>
     /// retry interval, default is 10 seconds
     /// </summary>
@@ -59,4 +59,11 @@ public class MemoryMQOptions
     /// <see cref="RetryMode"/>
     /// </summary>
     public RetryMode RetryMode { get; set; } = RetryMode.Fixed;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to use a dead letter queue for messages that cannot be consumed.
+    /// default is false.
+    /// you can find failure messages from database table 'memorymq_deadmessage'
+    /// </summary>
+    public bool EnableDeadLetterQueue { get; set; } = false;
 }

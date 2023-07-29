@@ -1,272 +1,131 @@
 ﻿using System.Diagnostics;
 using MemoryMQ.Configuration;
 using MemoryMQ.Consumer;
+using MemoryMQ.Dispatcher;
 using MemoryMQ.Messages;
 using MemoryMQ.RetryStrategy;
+using MemoryMQ.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Moq;
 
 namespace MemoryMQ.Test;
 
 public class RetryStrategyTest
 {
-    
-    
+    [Fact]
+    public async Task ScheduleRetryToDeadLetterQueue()
+    {
+        var mockLogger = new Mock<ILogger<DefaultRetryStrategy>>();
+
+        var options = Options.Create(
+            new MemoryMQOptions()
+            {
+                EnablePersistence = true,
+                EnableDeadLetterQueue = true,
+                GlobalRetryCount = 1
+            }
+        );
+        Mock<IMessageQueueManager> mockMessageQueueManager = new();
+        Mock<IPersistStorage> mockStorage = new();
+
+        mockStorage
+            .Setup(x => x.AddToDeadLetterQueueAsync(It.IsAny<IMessage>()).Result)
+            .Returns(true);
+
+        mockStorage.Setup(x => x.RemoveAsync(It.IsAny<IMessage>()).Result).Returns(true);
+
+        DefaultRetryStrategy mockStrategy = new DefaultRetryStrategy(
+            mockLogger.Object,
+            options,
+            mockMessageQueueManager.Object,
+            mockStorage.Object
+        );
+
+        var msg = new Message("topic", "hello");
+
+        msg.SetRetryCount(2);
+
+        await mockStrategy.ScheduleRetryAsync(
+            msg,
+            new MessageOptions() { Topic = "topic", RetryCount = 1 },
+            default
+        );
+
+        mockStorage.Verify(x => x.AddToDeadLetterQueueAsync(It.IsAny<IMessage>()), Times.Once);
+    }
+
     [Fact]
     public async Task MessageDontRetry_Passed()
     {
-        bool retryTrigger = false;
-        bool retryFailureTrigger = false;
+        var mockLogger = new Mock<ILogger<DefaultRetryStrategy>>();
 
-        var serviceCollection = new ServiceCollection();
+        var options = Options.Create(
+            new MemoryMQOptions()
+            {
+                EnablePersistence = true,
+                EnableDeadLetterQueue = true,
+                GlobalRetryCount = 1
+            }
+        );
 
-        serviceCollection.Configure<MemoryMQOptions>(config =>
-        {
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = false;
-            config.GlobalRetryCount =0;
-        });
+        Mock<IMessageQueueManager> mockMessageQueueManager = new();
 
-        serviceCollection.AddLogging();
-        serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        var sp = serviceCollection.BuildServiceProvider();
-        var strategy = sp.GetService<DefaultRetryStrategy>();
+        Mock<IPersistStorage> mockStorage = new();
 
-        IMessage msg = new Message("topic", "hello");
-        
-        strategy.MessageRetryEvent = async message =>
-        {
-            retryTrigger = true;
+        mockStorage.Setup(x => x.RemoveAsync(It.IsAny<IMessage>()).Result).Returns(true);
 
-            await Task.CompletedTask;
-        };
-        strategy.MessageRetryFailureEvent = async message =>
-        {
-            retryFailureTrigger = true;
+        DefaultRetryStrategy mockStrategy = new DefaultRetryStrategy(
+            mockLogger.Object,
+            options,
+            mockMessageQueueManager.Object,
+            mockStorage.Object
+        );
 
-            await Task.CompletedTask;
-        };
+        var msg = new Message("topic", "hello");
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        var messageOptions = new MessageOptions() { Topic = "topic", RetryCount = 0 };
 
-        await Task.Delay(1000);
-        
-        Assert.False(retryTrigger);
-        Assert.False(retryFailureTrigger);
+        await mockStrategy.ScheduleRetryAsync(msg, messageOptions, default);
 
-    }
-    
-    [Fact]
-    public async Task MessageRetryFailure_Passed()
-    {
-        bool retryTrigger = false;
-        bool retryFailureTrigger = false;
-
-        var serviceCollection = new ServiceCollection();
-
-        serviceCollection.Configure<MemoryMQOptions>(config =>
-        {
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = false;
-            config.GlobalRetryCount = 1;
-        });
-
-        serviceCollection.AddLogging();
-        serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        var sp = serviceCollection.BuildServiceProvider();
-        var strategy = sp.GetService<DefaultRetryStrategy>();
-
-        IMessage msg = new Message("topic", "hello");
-        
-        msg.IncreaseRetryCount();
-        msg.IncreaseRetryCount();
-        
-        strategy.MessageRetryEvent = async message =>
-        {
-            retryTrigger = true;
-
-            await Task.CompletedTask;
-        };
-        strategy.MessageRetryFailureEvent = async message =>
-        {
-            retryFailureTrigger = true;
-
-            await Task.CompletedTask;
-        };
-
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
-
-        await AssertEx.WaitUntil(() => retryFailureTrigger, 1000,6000);
-        Assert.False(retryTrigger);
-
-    }
-    [Fact]
-    public async Task MessageRetry_Passed()
-    {
-        bool retryTrigger = false;
-
-        var serviceCollection = new ServiceCollection();
-
-        serviceCollection.Configure<MemoryMQOptions>(config =>
-        {
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = false;
-        });
-
-        serviceCollection.AddLogging();
-        serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        await using var sp = serviceCollection.BuildServiceProvider();
-        var strategy = sp.GetService<DefaultRetryStrategy>();
-
-        IMessage msg = new Message("topic", "hello");
-
-        strategy.MessageRetryEvent = async message =>
-        {
-            retryTrigger = true;
-
-            await Task.CompletedTask;
-        };
-
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
-
-        await AssertEx.WaitUntil(() => retryTrigger, 1000,6000);
-    }
-
-
-    [Fact]
-    public async Task MessageRetryIncremental_Passed()
-    {
-        var retryTrigger = false;
-        var serviceCollection = new ServiceCollection();
-
-        serviceCollection.Configure<MemoryMQOptions>(config =>
-        {
-            config.RetryInterval = TimeSpan.FromSeconds(1);
-            config.EnablePersistence = false;
-            config.RetryMode = RetryMode.Incremental;
-            config.GlobalRetryCount = 10;
-        });
-
-        serviceCollection.AddLogging();
-        serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        await using var sp = serviceCollection.BuildServiceProvider();
-        var strategy = sp.GetService<DefaultRetryStrategy>();
-
-        IMessage msg = new Message("topic", "hello");
-        msg.IncreaseRetryCount();
-        msg.IncreaseRetryCount();
-        Stopwatch sw = new Stopwatch();
-        sw.Start();
-
-        strategy.MessageRetryEvent =  message =>
-        {
-            retryTrigger = true;
-
-            return Task.CompletedTask;
-        };
-
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
-
-        var cancellationTokenSource = new CancellationTokenSource(10000);
-
-        while (!retryTrigger && !cancellationTokenSource.IsCancellationRequested)
-        {
-            await Task.Delay(500, cancellationTokenSource.Token);
-        }
-        Assert.True(sw.ElapsedMilliseconds > 2000);
-
-        Assert.True(retryTrigger);
+        mockStorage.Verify(x => x.RemoveAsync(It.IsAny<IMessage>()), Times.Once);
     }
 
     [Fact]
-    public async Task MessageRetryFixed_Passed()
+    public async Task MessageRetryFailureEnqueue()
     {
-        var retryTrigger = false;
-        var serviceCollection = new ServiceCollection();
+        var mockLogger = new Mock<ILogger<DefaultRetryStrategy>>();
 
-        serviceCollection.Configure<MemoryMQOptions>(config =>
-        {
-            config.RetryInterval = TimeSpan.FromSeconds(1);
-            config.EnablePersistence = false;
-            config.RetryMode = RetryMode.Fixed;
-            config.GlobalRetryCount = 10;
-        });
+        var options = Options.Create(
+            new MemoryMQOptions()
+            {
+                EnablePersistence = true,
+                EnableDeadLetterQueue = true,
+                GlobalRetryCount = 1
+            }
+        );
+        Mock<IMessageQueueManager> mockMessageQueueManager = new();
 
-        serviceCollection.AddLogging();
-        serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        await using var sp = serviceCollection.BuildServiceProvider();
-        var strategy = sp.GetService<DefaultRetryStrategy>();
+        Mock<IPersistStorage> mockStorage = new();
 
-        IMessage msg = new Message("topic", "hello");
-        msg.IncreaseRetryCount();
-        msg.IncreaseRetryCount();
-        msg.IncreaseRetryCount();
-        Stopwatch sw = new Stopwatch();
-        sw.Start();
+        mockStorage.Setup(x => x.UpdateRetryAsync(It.IsAny<IMessage>()).Result).Returns(true);
 
-        strategy.MessageRetryEvent = async message =>
-        {
-            retryTrigger = true;
+        var mockStrategy = new DefaultRetryStrategy(
+            mockLogger.Object,
+            options,
+            mockMessageQueueManager.Object,
+            mockStorage.Object
+        );
 
-            await Task.CompletedTask;
-        };
+        var msg = new Message("topic", "hello");
 
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
+        var messageOptions = new MessageOptions() { Topic = "topic", RetryCount = 2 };
 
-        var cancellationTokenSource = new CancellationTokenSource(10000);
+        var opResult = await mockStrategy.ScheduleRetryAsync(msg, messageOptions, default);
 
-        while (!retryTrigger && !cancellationTokenSource.IsCancellationRequested)
-        {
-            await Task.Delay(500, cancellationTokenSource.Token);
-        }
+        mockStorage.Verify(x => x.UpdateRetryAsync(It.IsAny<IMessage>()), Times.Once);
 
-        Assert.True(retryTrigger);
-    }
-
-
-    [Fact]
-    public async Task MessageRetryExponential_Passed()
-    {
-        var retryTrigger = false;
-        var serviceCollection = new ServiceCollection();
-
-        serviceCollection.Configure<MemoryMQOptions>(config =>
-        {
-            config.RetryInterval = TimeSpan.FromSeconds(1);
-            config.EnablePersistence = false;
-            config.RetryMode = RetryMode.Exponential;
-            config.GlobalRetryCount = 10;
-        });
-
-        serviceCollection.AddLogging();
-        serviceCollection.AddSingleton<DefaultRetryStrategy>();
-        await using var sp = serviceCollection.BuildServiceProvider();
-        var strategy = sp.GetService<DefaultRetryStrategy>();
-
-        IMessage msg = new Message("topic", "hello");
-        msg.IncreaseRetryCount();
-        msg.IncreaseRetryCount();
-        Stopwatch sw = new Stopwatch();
-        sw.Start();
-
-        strategy.MessageRetryEvent = message =>
-        {
-            retryTrigger = true;
-
-            return Task.CompletedTask;
-        };
-
-        await strategy.ScheduleRetryAsync(msg, (new TestConsumer()).GetMessageConfig(), default);
-
-        var cancellationTokenSource = new CancellationTokenSource(10000);
-
-        while (!retryTrigger && !cancellationTokenSource.IsCancellationRequested)
-        {
-            await Task.Delay(500, cancellationTokenSource.Token);
-        }
-
-        Assert.True(sw.ElapsedMilliseconds > 4000);
-
-        Assert.True(retryTrigger);
+        Assert.True(opResult);
     }
 }
-

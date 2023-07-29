@@ -1,28 +1,25 @@
-﻿using EasyCompressor;
-using MemoryMQ.Compress;
-using MemoryMQ.Configuration;
-using MemoryMQ.Consumer;
-using MemoryMQ.Dispatcher;
-using MemoryMQ.Internal;
+﻿using MemoryMQ.Dispatcher;
 using MemoryMQ.Messages;
-using Microsoft.Extensions.Options;
 
 namespace MemoryMQ.Publisher;
 
+/// <summary>
+/// message publisher
+/// </summary>
 public class MessagePublisher : IMessagePublisher
 {
-    private readonly IMessageDispatcher _dispatcher;
+    private readonly IMessageQueueManager _queueManager;
 
-    public MessagePublisher(IMessageDispatcher dispatcher)
+    public MessagePublisher(IMessageQueueManager queueManager)
     {
-        _dispatcher = dispatcher;
+        _queueManager = queueManager;
     }
 
     public ValueTask<bool> PublishAsync(IMessage message)
     {
         ValidateMessage(message);
 
-        return _dispatcher.EnqueueAsync(message);
+        return _queueManager.EnqueueAsync(message);
     }
 
     public ValueTask<bool> PublishAsync(string topic, string body)
@@ -34,13 +31,12 @@ public class MessagePublisher : IMessagePublisher
 
     public ValueTask<bool> PublishAsync(ICollection<IMessage> messages)
     {
-
         foreach (var message in messages)
         {
             ValidateMessage(message);
         }
 
-        return _dispatcher.EnqueueAsync(messages);
+        return _queueManager.EnqueueAsync(messages);
     }
 
     private void ValidateMessage(IMessage message)

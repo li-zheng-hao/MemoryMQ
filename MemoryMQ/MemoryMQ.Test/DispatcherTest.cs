@@ -1,178 +1,54 @@
-﻿using System.Data.SQLite;
-using System.Reflection;
-using System.Threading.Channels;
-using MemoryMQ.Configuration;
+﻿using MemoryMQ.Configuration;
+using MemoryMQ.Consumer;
 using MemoryMQ.Dispatcher;
-using MemoryMQ.Messages;
-using Microsoft.Extensions.DependencyInjection;
+using MemoryMQ.RetryStrategy;
+using MemoryMQ.Storage;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Moq;
 
 namespace MemoryMQ.Test;
 
-public class DispatcherTest : IDisposable
+public class DispatcherTest
 {
-    private readonly string _dbName;
-
-    private readonly string _dbConnectionString;
-
-    private readonly string _dbpath;
-
-    public DispatcherTest()
-    {
-        _dbName = $"{Guid.NewGuid().ToString()}.db";
-        _dbConnectionString = $"Data Source={_dbName};Pooling=false";
-        _dbpath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _dbName);
-    }
-   
     [Fact]
-    public async Task TestFullQueueWithWait()
+    public async Task StartDispatchTest()
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
+        // mock
+        Mock<ILogger<DefaultMessageDispatcher>> logger = new();
 
-        services.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
+        IOptions<MemoryMQOptions> options = Options.Create(
+                                                           new MemoryMQOptions() { EnablePersistence = true }
+                                                          );
 
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = false;
-            // config.DbConnectionString = _dbConnectionString;
-            config.GlobalBoundedChannelFullMode = BoundedChannelFullMode.Wait;
-            config.GlobalMaxChannelSize = 1;
-        });
+        Mock<IServiceProvider> serviceProvider = new();
+        Mock<IConsumerFactory> consumerFactory = new();
 
-        services.AddScoped<TestSlowConsumer>();
-        await using var sp = services.BuildServiceProvider();
-        var messageDispatcher = sp.GetService<IMessageDispatcher>();
+        consumerFactory
+            .Setup(it => it.ConsumerOptions)
+            .Returns(
+                     new Dictionary<string, MessageOptions>()
+                     {
+                         {
+                             "topic",
+                             new MessageOptions() { Topic = "topic" }
+                         }
+                     }
+                    );
+
+        Mock<IRetryStrategy>       retryStrategy  = new();
+        Mock<IMessageQueueManager> queueManager   = new();
+        Mock<IPersistStorage>      persistStorage = new();
+
+        DefaultMessageDispatcher messageDispatcher = new DefaultMessageDispatcher(
+                                                                                  logger.Object,
+                                                                                  options,
+                                                                                  serviceProvider.Object,
+                                                                                  retryStrategy.Object,
+                                                                                  queueManager.Object,
+                                                                                  persistStorage.Object
+                                                                                 );
+
         await messageDispatcher.StartDispatchAsync(default);
-        
-        var message1 = new Message("topic", "body");
-        var opResult = await messageDispatcher.EnqueueAsync(message1);
-        Assert.True(opResult);
-        
-        
-        var message2 = new Message("topic", "body");
-        opResult = await messageDispatcher.EnqueueAsync(message2);
-        Assert.True(opResult);
-    }
-
-    [Fact]
-    public async Task TestEnqueueNoConsumer_Passed()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-
-        services.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = true;
-            config.DbConnectionString = _dbConnectionString;
-        });
-
-        await using var sp = services.BuildServiceProvider();
-        var dispatcher = sp.GetService<IMessageDispatcher>() as DefaultMessageDispatcher;
-        dispatcher.StartDispatchAsync(default);
-        
-        var opResult = await dispatcher.EnqueueAsync(new Message("topic", "hello"));
-        Assert.False(opResult);
-    }
-
-    [Fact]
-    public async Task TestEnqueue_Passed()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-
-        services.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = true;
-            config.DbConnectionString = _dbConnectionString;
-        });
-
-        services.AddScoped<TestConsumer>();
-        await using var sp = services.BuildServiceProvider();
-        var dispatcher = sp.GetService<IMessageDispatcher>() as DefaultMessageDispatcher;
-        dispatcher.StartDispatchAsync(default);
-        var opResult = await dispatcher.EnqueueAsync(new Message("topic", "hello"));
-        Assert.True(opResult);
-    }
-
-    [Fact]
-    public async Task TestRetry_Passed()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-
-        services.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = true;
-            config.DbConnectionString = _dbConnectionString;
-        });
-
-        services.AddScoped<TestConsumer>();
-        await using var sp = services.BuildServiceProvider();
-        var dispatcher = sp.GetService<IMessageDispatcher>() as DefaultMessageDispatcher;
-        dispatcher.StartDispatchAsync(default);
-        await dispatcher.RetryMessageAsync(new Message("topic", "body"));
-
-        AssertEx.WaitUntil(() => TestConsumer.Received == 1);
-    }
-
-    [Fact]
-    public async Task TestRetryFailure_Passed()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-
-        services.AddMemoryMQ(config =>
-        {
-            config.ConsumerAssemblies = new Assembly[]
-            {
-                typeof(TestConsumer).Assembly
-            };
-
-            config.RetryInterval = TimeSpan.FromMilliseconds(100);
-            config.EnablePersistence = true;
-            config.GlobalRetryCount = 1;
-            config.DbConnectionString = _dbConnectionString;
-        });
-
-        services.AddScoped<TestConsumer>();
-        await using var sp = services.BuildServiceProvider();
-        var dispatcher = sp.GetService<IMessageDispatcher>() as DefaultMessageDispatcher;
-        dispatcher.StartDispatchAsync(default);
-        var msg = new Message("topic", "body");
-        msg.IncreaseRetryCount();
-        msg.IncreaseRetryCount();
-        msg.IncreaseRetryCount();
-        await dispatcher.RetryMessageFailureAsync(msg);
-
-        AssertEx.WaitUntil(() => TestConsumer.ReceivedFailure == 1);
-        AssertEx.WaitUntil(() => TestConsumer.Received == 0);
-    }
-
-    public void Dispose()
-    {
-        if (File.Exists(_dbpath))
-            File.Delete(_dbpath);
     }
 }

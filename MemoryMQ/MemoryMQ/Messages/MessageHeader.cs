@@ -52,8 +52,8 @@ public static class MessageExtension
     {
         message.Header[MessageHeader.Retry] = (message.GetRetryCount() + 1 ?? 0 + 1).ToString();
     }
-    
-    public static void SetRetryCount(this IMessage message,long retryCount)
+
+    public static void SetRetryCount(this IMessage message, long retryCount)
     {
         message.Header[MessageHeader.Retry] = retryCount.ToString();
     }

@@ -13,15 +13,14 @@ public interface IRetryStrategy
     /// <param name="messageOptions">message option for this topic</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    Task ScheduleRetryAsync(IMessage message, MessageOptions messageOptions, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// message retry event
-    /// </summary>
-    Func<IMessage, Task> MessageRetryEvent { get; set; }
+    Task<bool> ScheduleRetryAsync(
+        IMessage          message,
+        MessageOptions    messageOptions,
+        CancellationToken cancellationToken
+    );
 
     /// <summary>
     /// message retry exceeding the retry count event
     /// </summary>
-    Func<IMessage, Task> MessageRetryFailureEvent { get; set; }
+    Func<IMessage, Task>? MessageRetryFailureEvent { get; set; }
 }

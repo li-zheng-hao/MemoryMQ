@@ -1,4 +1,5 @@
 ﻿using MemoryMQ.Configuration;
+using MemoryMQ.Dispatcher;
 using MemoryMQ.Internal;
 using MemoryMQ.Messages;
 using MemoryMQ.Storage;
@@ -11,62 +12,78 @@ public class DefaultRetryStrategy : IRetryStrategy
 {
     private readonly ILogger<DefaultRetryStrategy> _logger;
 
-
     private readonly IOptions<MemoryMQOptions> _options;
+
+    private readonly IMessageQueueManager _queueManager;
 
     private readonly IPersistStorage? _persistStorage;
 
-    public Func<IMessage, Task> MessageRetryEvent { get; set; }
-    
-    public Func<IMessage, Task> MessageRetryFailureEvent { get; set; }
+    public Func<IMessage, Task>? MessageRetryFailureEvent { get; set; }
 
     /// <summary>
     /// Retry queue, If restarted, the queue will be cleared and all messages will be consumed again after restored from database
     /// </summary>
     private readonly PriorityQueue<IMessage, long> _retryChannel;
 
-    private readonly object schedulerLock = new();
+    private readonly object _schedulerLock = new();
 
-    private bool isSchedulerRunning;
+    private bool _isSchedulerRunning;
 
-    public DefaultRetryStrategy(ILogger<DefaultRetryStrategy> logger, IOptions<MemoryMQOptions> options,
-        IPersistStorage persistStorage = null)
+    public DefaultRetryStrategy(
+        ILogger<DefaultRetryStrategy> logger,
+        IOptions<MemoryMQOptions>     options,
+        IMessageQueueManager          queueManager,
+        IPersistStorage?              persistStorage = null
+    )
     {
-        _logger = logger;
-        _options = options;
+        _logger         = logger;
+        _options        = options;
+        _queueManager   = queueManager;
         _persistStorage = persistStorage;
-        _retryChannel = new PriorityQueue<IMessage, long>();
+        _retryChannel   = new PriorityQueue<IMessage, long>();
     }
 
     private void RunRetryScheduler(CancellationToken cancellationToken)
     {
-        Task.Factory.StartNew(async () =>
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                while (_retryChannel.TryPeek(out _, out var ticks))
-                {
-                    await DequeueAndConsume(ticks);
-                }
+        Task.Factory.StartNew(
+                              async () =>
+                              {
+                                  while (!cancellationToken.IsCancellationRequested)
+                                  {
+                                      while (_retryChannel.TryPeek(out _, out var ticks))
+                                      {
+                                          await DequeueAndConsume(ticks);
+                                      }
 
-                await Task.Delay(500, cancellationToken);
-            }
-        }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                                      await Task.Delay(500, cancellationToken);
+                                  }
+                              },
+                              cancellationToken,
+                              TaskCreationOptions.LongRunning,
+                              TaskScheduler.Default
+                             );
     }
 
     private async ValueTask DequeueAndConsume(long ticks)
     {
         try
         {
-            if (ticks >= DateTime.Now.Ticks) return;
+            if (ticks >= DateTime.Now.Ticks)
+                return;
 
             _retryChannel.TryDequeue(out var msg, out _);
 
-            if (msg is null) return;
+            if (msg is null)
+                return;
 
-            _logger.LogInformation("retry message id: {MessageId} topic: {Topic} retry count {RetryCount}", msg.GetMessageId(), msg.GetTopic(), msg.GetRetryCount());
+            _logger.LogInformation(
+                                   "retry message id: {MessageId} topic: {Topic} retry count {RetryCount}",
+                                   msg.GetMessageId(),
+                                   msg.GetTopic(),
+                                   msg.GetRetryCount()
+                                  );
 
-            if (MessageRetryEvent != null) await MessageRetryEvent(msg);
+            await _queueManager.EnqueueAsync(msg, false);
         }
         catch (Exception e)
         {
@@ -74,46 +91,78 @@ public class DefaultRetryStrategy : IRetryStrategy
         }
     }
 
-    public async Task ScheduleRetryAsync(IMessage message, MessageOptions messageOptions,CancellationToken cancellationToken)
+    public async Task<bool> ScheduleRetryAsync(
+        IMessage          message,
+        MessageOptions    messageOptions,
+        CancellationToken cancellationToken
+    )
     {
-        if (!isSchedulerRunning)
-        {
-            lock (schedulerLock)
-            {
-                if (!isSchedulerRunning)
-                {
-                    RunRetryScheduler(cancellationToken);
+        StartRetryScheduler(cancellationToken);
 
-                    isSchedulerRunning = true;
-                }
-            }
-        }
-        
         var retryCount = messageOptions.GetRetryCount(_options.Value);
 
         // dont need retry
         if (retryCount == 0)
         {
-            if (messageOptions.GetEnablePersistence(_options.Value)) 
-                await _persistStorage!.RemoveAsync(message);
+            if (messageOptions.GetEnablePersistence(_options.Value))
+                return await _persistStorage!.RemoveAsync(message);
 
-            return;
+            return true;
         }
 
         // retry failure message
         if (message.GetRetryCount() > retryCount)
         {
-            if (MessageRetryFailureEvent != null) 
-                await MessageRetryFailureEvent(message);
-            if (messageOptions.GetEnablePersistence(_options.Value)) 
-                await _persistStorage!.RemoveAsync(message);
+            return await HandleMaxRetriesMessage(message, messageOptions);
         }
+
         // retry again
         else
         {
             EnqueueRetryQueue(message);
 
-            if (messageOptions.GetEnablePersistence(_options.Value)) await _persistStorage!.UpdateRetryAsync(message);
+            if (messageOptions.GetEnablePersistence(_options.Value))
+                return await _persistStorage!.UpdateRetryAsync(message);
+
+            return true;
+        }
+    }
+
+    private async Task<bool> HandleMaxRetriesMessage(
+        IMessage       message,
+        MessageOptions messageOptions
+    )
+    {
+        if (MessageRetryFailureEvent != null)
+            await MessageRetryFailureEvent(message);
+
+        bool operationResult = true;
+
+        if (messageOptions.GetEnablePersistence(_options.Value))
+            operationResult &= await _persistStorage!.RemoveAsync(message);
+
+        if (
+            messageOptions.GetEnablePersistence(_options.Value)
+            && _options.Value.EnableDeadLetterQueue
+        )
+            operationResult &= await _persistStorage!.AddToDeadLetterQueueAsync(message);
+
+        return operationResult;
+    }
+
+    private void StartRetryScheduler(CancellationToken cancellationToken)
+    {
+        if (_isSchedulerRunning)
+            return;
+
+        lock (_schedulerLock)
+        {
+            if (_isSchedulerRunning)
+                return;
+
+            RunRetryScheduler(cancellationToken);
+
+            _isSchedulerRunning = true;
         }
     }
 
@@ -121,28 +170,20 @@ public class DefaultRetryStrategy : IRetryStrategy
     {
         var retryCount = message.GetRetryCount()!;
 
-        TimeSpan delay;
+        TimeSpan delay = _options.Value.RetryMode switch
+                         {
+                             RetryMode.Fixed       => _options.Value.RetryInterval,
+                             RetryMode.Exponential => _options.Value.RetryInterval * Math.Pow(2, retryCount.Value),
+                             RetryMode.Incremental => _options.Value.RetryInterval * retryCount.Value,
+                             _                     => throw new ArgumentOutOfRangeException(_options.Value.RetryMode.ToString())
+                         };
 
-        switch (_options.Value.RetryMode)
-        {
-            case RetryMode.Fixed:
-                delay = _options.Value.RetryInterval;
-
-                break;
-            case RetryMode.Exponential:
-                delay = _options.Value.RetryInterval * Math.Pow(2, retryCount.Value);
-
-                break;
-            case RetryMode.Incremental:
-                delay = _options.Value.RetryInterval * retryCount.Value;
-
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(_options.Value.RetryMode.ToString());
-        }
-
-        _logger.LogInformation("message {MessageId} next retry interval is {DelayTotalSeconds} seconds, it will trigger at {Add}",
-            message.GetMessageId(), delay.TotalSeconds, DateTime.Now.Add(delay));
+        _logger.LogInformation(
+                               "message {MessageId} next retry interval is {DelayTotalSeconds} seconds, it will trigger at {Add}",
+                               message.GetMessageId(),
+                               delay.TotalSeconds,
+                               DateTime.Now.Add(delay)
+                              );
 
         _retryChannel.Enqueue(message, DateTime.Now.Add(delay).Ticks);
     }

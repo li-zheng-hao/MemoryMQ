@@ -14,8 +14,9 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddMemoryMQ(it =>
 {
     it.EnablePersistence = true;
-    it.RetryMode = RetryMode.Incremental;
-    it.RetryInterval = TimeSpan.FromSeconds(5);
+    it.RetryMode = RetryMode.Fixed;
+    it.RetryInterval = TimeSpan.FromSeconds(2);
+    it.EnableDeadLetterQueue=true;
 });
 
 builder.Services.AddScoped<ConsumerA>();

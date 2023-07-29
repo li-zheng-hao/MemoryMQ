@@ -12,25 +12,31 @@ namespace MemoryMQ;
 
 public static class ServiceCollectionExtension
 {
-    public static IServiceCollection AddMemoryMQ(this IServiceCollection serviceCollection,
-        Action<MemoryMQOptions> config)
+    public static IServiceCollection AddMemoryMQ(
+        this IServiceCollection serviceCollection,
+        Action<MemoryMQOptions> config
+    )
     {
         serviceCollection.Configure(config);
 
         serviceCollection.AddSingleton<IConsumerFactory, DefaultConsumerFactory>();
 
-        serviceCollection.AddSingleton<IValidateOptions
-            <MemoryMQOptions>, MemoryMQOptionsValidation>();
+        serviceCollection.AddSingleton<
+            IValidateOptions<MemoryMQOptions>,
+            MemoryMQOptionsValidation
+        >();
 
         serviceCollection.AddSingleton<IMessageDispatcher, DefaultMessageDispatcher>();
 
         serviceCollection.AddHostedService<DispatcherService>();
 
-     
-
         serviceCollection.AddSingleton<IMessagePublisher, MessagePublisher>();
 
         serviceCollection.AddSingleton<IRetryStrategy, DefaultRetryStrategy>();
+
+        serviceCollection.AddSingleton<IMessageQueueManager, DefaultMessageQueueManager>();
+
+        serviceCollection.AddTransient<IConsumerExecutor, ConsumerExecutor>();
 
         MemoryMQOptions memoryMqOptions = new MemoryMQOptions();
 
@@ -38,9 +44,14 @@ public static class ServiceCollectionExtension
 
         if (memoryMqOptions.EnablePersistence)
         {
-            serviceCollection.AddSingleton<SQLiteConnection>(sp => 
-                new SQLiteConnection(sp.GetRequiredService<IOptions<MemoryMQOptions>>().Value.DbConnectionString)
-                    .OpenAndReturn());
+            serviceCollection.AddSingleton<SQLiteConnection>(
+                                                             sp =>
+                                                                 new SQLiteConnection(
+                                                                                      sp.GetRequiredService<IOptions<MemoryMQOptions>>()
+                                                                                        .Value.DbConnectionString
+                                                                                     ).OpenAndReturn()
+                                                            );
+
             serviceCollection.AddSingleton<IPersistStorage, SqlitePersistStorage>();
         }
 
