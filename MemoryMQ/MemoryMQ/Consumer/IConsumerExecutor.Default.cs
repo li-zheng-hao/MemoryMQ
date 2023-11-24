@@ -52,6 +52,8 @@ public class ConsumerExecutor : IConsumerExecutor
 
         try
         {
+            _logger.LogDebug($"consume message {message.GetMessageId()} at {DateTime.Now}");
+            
             await consumer.ReceivedAsync(message, cancellationToken);
         }
         catch (Exception e)
